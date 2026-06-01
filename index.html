@@ -159,10 +159,9 @@ function loadDealers(){
 window.onload = loadDealers;
 
 /* ✅ ULTRA FAST + AD1 FIXED SCANNER */
-let codeReader;
-
 function openScanner(){
-  document.getElementById("readerBox").style.display="block";
+
+  document.getElementById("readerBox").style.display = "block";
 
   if(scanning) return;
   scanning = true;
@@ -170,34 +169,28 @@ function openScanner(){
   codeReader = new ZXing.BrowserMultiFormatReader();
 
   let lastScan = "";
-  let lastTime = 0;
+  let scanLock = false;
 
   codeReader.decodeFromVideoDevice(null, 'reader', (result, err) => {
 
     if(result){
 
       let raw = result.getText();
-      let now = Date.now();
 
-      // 🚫 BLOCK DUPLICATE
-      if(raw === lastScan && (now - lastTime < 2000)){
-        return;
-      }
-
-      lastScan = raw;
-      lastTime = now;
-
-      // 🔥 CLEAN VALUE
+      // ✅ REMOVE //1, //5, //10
       let cleanQR = raw
         .trim()
         .replace(/\s/g,"")
-        .replace(/\/\/\d+$/,"");
+        .replace(/\/\/(1|5|10)/g,"");
+
+      // ✅ PREVENT DUPLICATE + FAST MULTI SCAN
+      if(cleanQR === lastScan || scanLock) return;
+
+      lastScan = cleanQR;
+      scanLock = true;
 
       beep.currentTime = 0;
       beep.play();
-
-      // 🛑 STOP TEMP
-      codeReader.reset();
 
       fetch(API_URL + "?uid=" + encodeURIComponent(cleanQR))
       .then(r => r.json())
@@ -205,15 +198,15 @@ function openScanner(){
 
         if(!data.variant){
           alert("❌ Not Found - " + cleanQR);
-          restartScanner();
+          scanLock = false;
           return;
         }
 
         if(!items[data.variant]){
           items[data.variant] = {
-            variant:data.variant,
-            qty:1,
-            mrp:Number(data.mrp)||0
+            variant: data.variant,
+            qty: 1,
+            mrp: Number(data.mrp) || 0
           };
         } else {
           items[data.variant].qty++;
@@ -221,27 +214,22 @@ function openScanner(){
 
         render();
 
+        // ✅ UNLOCK AFTER DELAY (prevents double scan)
         setTimeout(()=>{
-          restartScanner();
-        }, 800);
+          scanLock = false;
+        }, 1200);
 
       })
       .catch(()=>{
-        restartScanner();
+        scanLock = false;
       });
     }
 
-  });
+    if(err && !(err instanceof ZXing.NotFoundException)){
+      console.error(err);
+    }
 
-  function restartScanner(){
-    if(!scanning) return;
-    codeReader.decodeFromVideoDevice(null, 'reader', (res, err) => {});
-  }
-}
-  // 🔁 RESTART FUNCTION
-  function restartScanner(){
-    codeReader.decodeFromVideoDevice(null, 'reader', arguments.callee);
-  }
+  });
 }
 /* KEEP ALL YOUR FUNCTIONS SAME BELOW (NO CHANGE) */
 
