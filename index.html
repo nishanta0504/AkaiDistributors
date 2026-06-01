@@ -159,6 +159,8 @@ function loadDealers(){
 window.onload = loadDealers;
 
 /* ✅ ULTRA FAST + AD1 FIXED SCANNER */
+let codeReader;
+
 function openScanner(){
 
   document.getElementById("readerBox").style.display = "block";
@@ -170,76 +172,98 @@ function openScanner(){
 
   codeReader = new ZXing.BrowserMultiFormatReader();
 
-  let lastScan = "";
-  let scanLock = false;
+  let lastScanLocal = "";
+  let scanLockLocal = false;
 
-  // ✅ GET CAMERA LIST FIRST (IMPORTANT FIX)
-  codeReader.getVideoInputDevices()
+  // ✅ UNIVERSAL CAMERA HANDLING (ALL DEVICES SAFE)
+  codeReader.listVideoInputDevices()
   .then((videoInputDevices) => {
 
-    const selectedDeviceId = videoInputDevices[0].deviceId;
+    let selectedDeviceId = videoInputDevices[0]?.deviceId;
 
-    codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
+    // ✅ TRY TO PICK BACK CAMERA (MOBILE)
+    for (let device of videoInputDevices) {
+      const label = device.label.toLowerCase();
 
-      if(result){
-
-        let raw = result.getText();
-
-        let cleanQR = raw
-          .trim()
-          .replace(/\s/g,"")
-          .replace(/\/\/(1|5|10)/g,"");
-
-        if(cleanQR === lastScan || scanLock) return;
-
-        lastScan = cleanQR;
-        scanLock = true;
-
-        beep.currentTime = 0;
-        beep.play();
-
-        fetch(API_URL + "?uid=" + encodeURIComponent(cleanQR))
-        .then(r => r.json())
-        .then(data => {
-
-          if(!data.variant){
-            alert("❌ Not Found - " + cleanQR);
-            scanLock = false;
-            return;
-          }
-
-          if(!items[data.variant]){
-            items[data.variant] = {
-              variant: data.variant,
-              qty: 1,
-              mrp: Number(data.mrp) || 0
-            };
-          } else {
-            items[data.variant].qty++;
-          }
-
-          render();
-
-          setTimeout(()=>{
-            scanLock = false;
-          }, 1200);
-
-        })
-        .catch(()=>{
-          scanLock = false;
-        });
+      if (
+        label.includes("back") ||
+        label.includes("rear") ||
+        label.includes("environment")
+      ) {
+        selectedDeviceId = device.deviceId;
+        break;
       }
+    }
 
-      if(err && !(err instanceof ZXing.NotFoundException)){
-        console.error(err);
+    // ✅ START SCANNER (SAFE CALL)
+    codeReader.decodeFromVideoDevice(
+      selectedDeviceId,
+      videoElement,
+      (result, err) => {
+
+        if (result) {
+
+          let raw = result.getText();
+
+          let cleanQR = raw
+            .trim()
+            .replace(/\s/g, "")
+            .replace(/\/\/(1|5|10)/g, "");
+
+          // ✅ PREVENT DUPLICATE FAST SCAN
+          if (cleanQR === lastScanLocal || scanLockLocal) return;
+
+          lastScanLocal = cleanQR;
+          scanLockLocal = true;
+
+          // ✅ BEEP (SAFE)
+          try {
+            beep.currentTime = 0;
+            beep.play().catch(()=>{});
+          } catch(e){}
+
+          fetch(API_URL + "?uid=" + encodeURIComponent(cleanQR))
+          .then(r => r.json())
+          .then(data => {
+
+            if (!data.variant) {
+              alert("❌ Not Found - " + cleanQR);
+              scanLockLocal = false;
+              return;
+            }
+
+            if (!items[data.variant]) {
+              items[data.variant] = {
+                variant: data.variant,
+                qty: 1,
+                mrp: Number(data.mrp) || 0
+              };
+            } else {
+              items[data.variant].qty++;
+            }
+
+            render();
+
+            setTimeout(() => {
+              scanLockLocal = false;
+            }, 1200);
+
+          })
+          .catch(() => {
+            scanLockLocal = false;
+          });
+        }
+
+        if (err && !(err instanceof ZXing.NotFoundException)) {
+          console.error(err);
+        }
       }
-
-    });
+    );
 
   })
   .catch(err => {
     console.error("Camera Error:", err);
-    alert("❌ Camera not accessible. Allow permission.");
+    alert("❌ Camera permission required");
   });
 }
 /* KEEP ALL YOUR FUNCTIONS SAME BELOW (NO CHANGE) */
