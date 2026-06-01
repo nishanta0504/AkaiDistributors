@@ -86,7 +86,7 @@ td,th { padding:10px; text-align:center; }
 
 <div id="readerBox">
 <button id="closeScan" onclick="closeScanner()">×</button>
-<div id="reader" style="width:220px;margin:auto;"></div>
+<video id="reader" style="width:100%;max-width:350px;"></video>
 </div>
 
 <table>
@@ -159,7 +159,7 @@ function loadDealers(){
 window.onload = loadDealers;
 
 /* ✅ ULTRA FAST + AD1 FIXED SCANNER */
-let html5Scanner;
+let codeReader;
 
 function openScanner(){
 
@@ -168,113 +168,118 @@ function openScanner(){
   if(scanning) return;
   scanning = true;
 
-  if(html5Scanner){
-    try{
-      html5Scanner.clear();
-    }catch(e){}
-  }
+  const videoElement = document.getElementById("reader");
 
-  html5Scanner = new Html5Qrcode("reader");
+  const hints = new Map();
 
+  hints.set(
+    ZXing.DecodeHintType.POSSIBLE_FORMATS,
+    [
+      ZXing.BarcodeFormat.QR_CODE,
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.CODE_39,
+      ZXing.BarcodeFormat.CODE_93,
+      ZXing.BarcodeFormat.EAN_13,
+      ZXing.BarcodeFormat.EAN_8,
+      ZXing.BarcodeFormat.UPC_A,
+      ZXing.BarcodeFormat.UPC_E,
+      ZXing.BarcodeFormat.ITF,
+      ZXing.BarcodeFormat.CODABAR,
+      ZXing.BarcodeFormat.DATA_MATRIX,
+      ZXing.BarcodeFormat.AZTEC,
+      ZXing.BarcodeFormat.PDF_417
+    ]
+  );
+
+  hints.set(
+    ZXing.DecodeHintType.TRY_HARDER,
+    true
+  );
+
+  codeReader = new ZXing.BrowserMultiFormatReader(hints);
+
+  let scanLockLocal = false;
   let lastScanLocal = "";
   let lastScanTime = 0;
-  let scanLockLocal = false;
 
-  Html5Qrcode.getCameras()
-  .then(cameras => {
+  codeReader.decodeFromConstraints(
+    {
+      video:{
+        facingMode:{ ideal:"environment" },
 
-    let cameraId =
-      cameras.find(c =>
-        c.label.toLowerCase().includes("back")
-      )?.id || cameras[0].id;
+        width:{ ideal:1920 },
+        height:{ ideal:1080 }
+      }
+    },
 
-    html5Scanner.start(
-      cameraId,
-      {
-        fps: 20,
-        qrbox: { width: 250, height: 250 },
+    videoElement,
 
-        aspectRatio: 1,
+    (result, err)=>{
 
-        disableFlip: false,
+      if(!result) return;
 
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
-        }
-      },
+      let cleanQR = result
+        .getText()
+        .trim()
+        .replace(/\s/g,"")
+        .replace(/\/\/(1|5|10)/g,"");
 
-      (decodedText) => {
+      if(
+        cleanQR === lastScanLocal &&
+        Date.now() - lastScanTime < 1500
+      ){
+        return;
+      }
 
-        if(scanLockLocal) return;
+      if(scanLockLocal) return;
 
-        let cleanQR = decodedText
-          .trim()
-          .replace(/\s/g,"")
-          .replace(/\/\/(1|5|10)/g,"");
+      scanLockLocal = true;
 
-        if(
-          cleanQR === lastScanLocal &&
-          Date.now() - lastScanTime < 1500
-        ){
-          return;
-        }
+      lastScanLocal = cleanQR;
+      lastScanTime = Date.now();
 
-        scanLockLocal = true;
+      beep.currentTime = 0;
+      beep.play().catch(()=>{});
 
-        lastScanLocal = cleanQR;
-        lastScanTime = Date.now();
+      fetch(API_URL + "?uid=" + encodeURIComponent(cleanQR))
+      .then(r=>r.json())
+      .then(data=>{
 
-        try{
-          beep.currentTime = 0;
-          beep.play().catch(()=>{});
-        }catch(e){}
+        if(!data.variant){
 
-        fetch(API_URL + "?uid=" + encodeURIComponent(cleanQR))
-        .then(r => r.json())
-        .then(data => {
-
-          if(!data.variant){
-
-            alert("❌ Not Found - " + cleanQR);
-
-            setTimeout(()=>{
-              scanLockLocal = false;
-            },1000);
-
-            return;
-          }
-
-          if(!items[data.variant]){
-            items[data.variant] = {
-              variant:data.variant,
-              qty:1,
-              mrp:Number(data.mrp)||0
-            };
-          }else{
-            items[data.variant].qty++;
-          }
-
-          render();
+          alert("❌ Not Found - " + cleanQR);
 
           setTimeout(()=>{
             scanLockLocal = false;
           },1000);
 
-        })
-        .catch(()=>{
+          return;
+        }
+
+        if(!items[data.variant]){
+          items[data.variant]={
+            variant:data.variant,
+            qty:1,
+            mrp:Number(data.mrp)||0
+          };
+        }else{
+          items[data.variant].qty++;
+        }
+
+        render();
+
+        setTimeout(()=>{
           scanLockLocal = false;
-        });
+        },1000);
 
-      },
+      })
+      .catch(()=>{
+        scanLockLocal = false;
+      });
 
-      (errorMessage)=>{}
-    );
+    }
 
-  })
-  .catch(err=>{
-    alert("Camera Error");
-    console.error(err);
-  });
+  );
 
 }
   
@@ -286,15 +291,14 @@ function closeScanner(){
 
   scanning = false;
 
-  if(html5Scanner){
+  if(codeReader){
+    codeReader.reset();
+  }
 
-    html5Scanner
-      .stop()
-      .then(()=>{
-        html5Scanner.clear();
-      })
-      .catch(()=>{});
+  let video = document.getElementById("reader");
 
+  if(video.srcObject){
+    video.srcObject.getTracks().forEach(t=>t.stop());
   }
 
 }
