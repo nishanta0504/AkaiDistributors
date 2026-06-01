@@ -86,7 +86,7 @@ td,th { padding:10px; text-align:center; }
 
 <div id="readerBox">
 <button id="closeScan" onclick="closeScanner()">×</button>
-<div id="reader"></div>
+<video id="reader" style="width:220px;"></video>
 </div>
 
 <table>
@@ -166,69 +166,80 @@ function openScanner(){
   if(scanning) return;
   scanning = true;
 
+  const videoElement = document.getElementById("reader");
+
   codeReader = new ZXing.BrowserMultiFormatReader();
 
   let lastScan = "";
   let scanLock = false;
 
-  codeReader.decodeFromVideoDevice(null, 'reader', (result, err) => {
+  // ✅ GET CAMERA LIST FIRST (IMPORTANT FIX)
+  codeReader.getVideoInputDevices()
+  .then((videoInputDevices) => {
 
-    if(result){
+    const selectedDeviceId = videoInputDevices[0].deviceId;
 
-      let raw = result.getText();
+    codeReader.decodeFromVideoDevice(selectedDeviceId, videoElement, (result, err) => {
 
-      // ✅ REMOVE //1, //5, //10
-      let cleanQR = raw
-        .trim()
-        .replace(/\s/g,"")
-        .replace(/\/\/(1|5|10)/g,"");
+      if(result){
 
-      // ✅ PREVENT DUPLICATE + FAST MULTI SCAN
-      if(cleanQR === lastScan || scanLock) return;
+        let raw = result.getText();
 
-      lastScan = cleanQR;
-      scanLock = true;
+        let cleanQR = raw
+          .trim()
+          .replace(/\s/g,"")
+          .replace(/\/\/(1|5|10)/g,"");
 
-      beep.currentTime = 0;
-      beep.play();
+        if(cleanQR === lastScan || scanLock) return;
 
-      fetch(API_URL + "?uid=" + encodeURIComponent(cleanQR))
-      .then(r => r.json())
-      .then(data => {
+        lastScan = cleanQR;
+        scanLock = true;
 
-        if(!data.variant){
-          alert("❌ Not Found - " + cleanQR);
+        beep.currentTime = 0;
+        beep.play();
+
+        fetch(API_URL + "?uid=" + encodeURIComponent(cleanQR))
+        .then(r => r.json())
+        .then(data => {
+
+          if(!data.variant){
+            alert("❌ Not Found - " + cleanQR);
+            scanLock = false;
+            return;
+          }
+
+          if(!items[data.variant]){
+            items[data.variant] = {
+              variant: data.variant,
+              qty: 1,
+              mrp: Number(data.mrp) || 0
+            };
+          } else {
+            items[data.variant].qty++;
+          }
+
+          render();
+
+          setTimeout(()=>{
+            scanLock = false;
+          }, 1200);
+
+        })
+        .catch(()=>{
           scanLock = false;
-          return;
-        }
+        });
+      }
 
-        if(!items[data.variant]){
-          items[data.variant] = {
-            variant: data.variant,
-            qty: 1,
-            mrp: Number(data.mrp) || 0
-          };
-        } else {
-          items[data.variant].qty++;
-        }
+      if(err && !(err instanceof ZXing.NotFoundException)){
+        console.error(err);
+      }
 
-        render();
+    });
 
-        // ✅ UNLOCK AFTER DELAY (prevents double scan)
-        setTimeout(()=>{
-          scanLock = false;
-        }, 1200);
-
-      })
-      .catch(()=>{
-        scanLock = false;
-      });
-    }
-
-    if(err && !(err instanceof ZXing.NotFoundException)){
-      console.error(err);
-    }
-
+  })
+  .catch(err => {
+    console.error("Camera Error:", err);
+    alert("❌ Camera not accessible. Allow permission.");
   });
 }
 /* KEEP ALL YOUR FUNCTIONS SAME BELOW (NO CHANGE) */
