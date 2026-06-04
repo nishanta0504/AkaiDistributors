@@ -236,9 +236,6 @@ function openScanner(){
         scanLockLocal = false;
       },500);
 
-      lastScanLocal = cleanQR;
-      lastScanTime = Date.now();
-
       beep.currentTime = 0;
       beep.play().catch(()=>{});
 
