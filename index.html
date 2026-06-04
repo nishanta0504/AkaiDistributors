@@ -3,7 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
@@ -164,21 +164,19 @@ function openScanner(){
   scanner = new Html5Qrcode("reader");
 
   scanner.start(
-    { facingMode:"environment" },
-    {
-      fps: 18,
-      qrbox: { width: 250, height: 120 }, // better for barcode
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.QR_CODE,
-        Html5QrcodeSupportedFormats.CODE_128
-      ]
-    }
+  { facingMode: "environment" },
+  {
+    fps: 15,
+    qrbox: { width: 250, height: 120 },
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.QR_CODE,
+      Html5QrcodeSupportedFormats.CODE_128
+    ]
+  },
     qr => {
 
       // ✅ CLEAN QR / BARCODE DATA
-      let cleanQR = qr
-        .replace(/\/\/(1|5|10)$/,'')  // remove //1 //5 //10 ONLY at end
-        .trim();
+      let cleanQR = qr.replace(/\/\/(1|5|10)$/,'').trim();
 
       if(scanLock) return;
       scanLock = true;
