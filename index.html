@@ -135,6 +135,8 @@ let scanner, scanning=false;
 let manualMode = false;
 let scanLock = false;
 let lastScan = "";   // ✅ NEW (prevent duplicate)
+let lastScanLocal = "";
+let lastScanTime = 0;
 
 const beep = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
@@ -253,11 +255,6 @@ function openScanner(){
         if(!data.variant){
 
           alert("❌ Not Found - " + cleanQR);
-
-          setTimeout(()=>{
-            scanLockLocal = false;
-          },300);
-
           return;
         }
 
@@ -272,10 +269,6 @@ function openScanner(){
         }
 
         render();
-
-        setTimeout(()=>{
-          scanLockLocal = false;
-        },1000);
 
       })
       .catch(()=>{
