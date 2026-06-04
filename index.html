@@ -177,7 +177,8 @@ function openScanner(){
     ZXing.DecodeHintType.POSSIBLE_FORMATS,
     [
       ZXing.BarcodeFormat.QR_CODE,
-      ZXing.BarcodeFormat.CODE_128
+      ZXing.BarcodeFormat.CODE_128,
+      ZXing.BarcodeFormat.DATA_MATRIX
     ]
   );
 
@@ -196,7 +197,7 @@ function openScanner(){
         width: { ideal: 1280 },
         height: { ideal: 720 },
 
-        frameRate: { ideal: 30, max: 30 },
+        frameRate: { ideal: 60, max: 60 },
 
         advanced: [
           { focusMode: "continuous" },
@@ -212,11 +213,18 @@ function openScanner(){
 
       if(!result) return;
 
-      let cleanQR = result
-        .getText()
-        .trim()
-        .replace(/\s/g,"")
-        .replace(/\/\/(1|5|10)/g,"");
+      let rawText = result.getText().trim();
+      let format = result.getBarcodeFormat();
+
+      let cleanQR;
+
+      // ✅ APPLY REMOVE ONLY FOR CODE_128
+      if (format === ZXing.BarcodeFormat.CODE_128) {
+        cleanQR = rawText.replace(/\/\/(1|5|10)/g, "");
+      } else {
+        // ✅ KEEP QR / OTHER FORMATS EXACT
+        cleanQR = rawText;
+      }
 
       const now = Date.now();
 
