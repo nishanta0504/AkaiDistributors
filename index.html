@@ -2,8 +2,8 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
@@ -32,7 +32,7 @@ button {
 }
 
 #readerBox { display:none; position:relative; }
-#reader { width:180px; margin:auto; }
+#reader { width:220px; margin:auto; }
 
 #closeScan {
   position:absolute;
@@ -85,7 +85,7 @@ td,th { padding:10px; text-align:center; }
 
 <div id="readerBox">
 <button id="closeScan" onclick="closeScanner()">×</button>
-<video id="reader" style="width:180px;"></video>
+<div id="reader"></div>
 </div>
 
 <table>
@@ -133,7 +133,6 @@ let items = {};
 let scanner, scanning=false;
 let manualMode = false;
 let scanLock = false;
-let lastScan = "";   // ✅ NEW (prevent duplicate)
 
 const beep = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
 
@@ -157,103 +156,61 @@ function loadDealers(){
 }
 window.onload = loadDealers;
 
-/* ✅ ULTRA FAST + AD1 FIXED SCANNER */
-let codeReader;
+/* SCANNER (UNCHANGED) */
+function openScanner(){
+  document.getElementById("readerBox").style.display="block";
+  if(scanning) return;
 
-function openScanner() {
-  document.getElementById("readerBox").style.display = "block";
-  if (scanning) return;
-  scanning = true;
+  scanner = new Html5Qrcode("reader");
 
-  const videoElement = document.getElementById("reader");
-  let scanLock = false;
-  let lastText = "";
-  let lastTime = 0;
+  scanner.start(
+    { facingMode:"environment" },
+    { fps:20, qrbox:180 },
+    qr => {
 
-  // ── READER 1: QR only (fast, TRY_HARDER on for mobile angle tolerance)
-  const qrHints = new Map();
-  qrHints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.QR_CODE]);
-  qrHints.set(ZXing.DecodeHintType.TRY_HARDER, true);   // ← MUST be true for QR on mobile
-  const qrReader = new ZXing.BrowserQRCodeReader(qrHints); // ← dedicated QR reader, not Multi
+      if(scanLock) return;
+      scanLock = true;
 
-  // ── READER 2: Code128 only (separate reader, shared stream)
-  const c128Hints = new Map();
-  c128Hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
-  c128Hints.set(ZXing.DecodeHintType.TRY_HARDER, false); // fine for barcodes
-  const c128Reader = new ZXing.BrowserMultiFormatReader(c128Hints, 150);
+      beep.currentTime = 0;
+      beep.play();
 
-  codeReader = qrReader; // keep reference for closeScanner()
+      fetch(API_URL+"?uid="+encodeURIComponent(qr))
+      .then(r=>r.json())
+      .then(data=>{
 
-  const constraints = {
-    video: {
-      facingMode: { ideal: "environment" },
-      width: { ideal: 1280 },   // ← higher res = faster QR decode (more pixels = clearer finder pattern)
-      height: { ideal: 720 }
-    }
-  };
-
-  function handleResult(result) {
-    if (!result) return;
-
-    let cleanQR = result.getText().trim()
-      .replace(/\s/g, "")
-      .replace(/\/\/(1|5|10)/g, "");
-
-    const now = Date.now();
-    if (cleanQR === lastText && now - lastTime < 800) return;
-    if (scanLock) return;
-
-    scanLock = true;
-    lastText = cleanQR;
-    lastTime = now;
-
-    beep.currentTime = 0;
-    beep.play().catch(() => {});
-
-    fetch(API_URL + "?uid=" + encodeURIComponent(cleanQR))
-      .then(r => r.json())
-      .then(data => {
-        if (!data.variant) {
-          alert("❌ Not Found - " + cleanQR);
+        if(!data.variant){
+          alert("❌ Not Found - "+qr);
           return;
         }
-        if (!items[data.variant]) {
-          items[data.variant] = { variant: data.variant, qty: 1, mrp: Number(data.mrp) || 0 };
+
+        if(!items[data.variant]){
+          items[data.variant] = {
+            variant:data.variant,
+            qty:1,
+            mrp:Number(data.mrp)||0
+          };
         } else {
           items[data.variant].qty++;
         }
+
         render();
-      })
-      .catch(() => {})
-      .finally(() => {
-        setTimeout(() => { scanLock = false; }, 400); // 400ms is enough, was 1000ms before
       });
-  }
 
-  // Start QR reader first (gets camera permission + stream)
-  qrReader.decodeFromConstraints(constraints, videoElement, (result, err) => {
-    handleResult(result);
-  });
+      setTimeout(()=>scanLock=false,1500);
+    }
+  );
 
-  // Start Code128 reader on same video element (reuses stream, no second camera request)
-  c128Reader.decodeFromConstraints(constraints, videoElement, (result, err) => {
-    handleResult(result);
-  });
+  scanning=true;
 }
-  
+
 /* KEEP ALL YOUR FUNCTIONS SAME BELOW (NO CHANGE) */
 
-function closeScanner() {
-  document.getElementById("readerBox").style.display = "none";
-  scanning = false;
-
-  if (codeReader) codeReader.reset();
-
-  // Stop video track
-  const reader = document.getElementById("reader");
-  if (reader.srcObject) {
-    reader.srcObject.getTracks().forEach(t => t.stop());
-    reader.srcObject = null;
+function closeScanner(){
+  if(scanner){
+    scanner.stop().then(()=>{
+      scanning=false;
+      readerBox.style.display="none";
+    });
   }
 }
 
@@ -311,6 +268,7 @@ function checkFields(){
     return false;
   }
 
+  /* ✅ ADDED */
   if(!photoData){
     alert("Capture Confirmation Photo");
     return false;
@@ -374,6 +332,7 @@ function download(){
 
   html+=`<tr><td><b>Total</b></td><td><b>${tq}</b></td><td><b>${tm}</b></td></tr></table>`;
 
+  /* ✅ ADDED PHOTO */
   html+=`<br><div style="text-align:center;"><img src="${photoData}" width="120"></div>`;
 
   bill.innerHTML=html;
@@ -393,6 +352,7 @@ function submitData(){
 
   if(!checkFields()) return;
 
+  // ✅ FIX: define BEFORE fetch
   const cleanItems = Object.values(items).map(i => ({
     variant: String(i.variant).trim(),
     qty: Number(i.qty) || 0
@@ -400,6 +360,10 @@ function submitData(){
 
   fetch(API_URL,{
     method:"POST",
+
+    // ❌ NO headers
+    // ❌ NO mode: no-cors
+
     body: new URLSearchParams({
       data: JSON.stringify({
         challan: String(challan.value).trim(),
@@ -426,6 +390,7 @@ function submitData(){
       throw new Error(data.message || "Server error");
     }
 
+    // ✅ KEEP YOUR EXISTING LOGIC
     let temp = {};
     (data.notMatched || []).forEach(i=>{
       temp[i.variant] = i;
@@ -448,6 +413,7 @@ function submitData(){
   });
 
 }
+ 	
 
 </script>
 
