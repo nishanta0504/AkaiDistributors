@@ -161,28 +161,19 @@ window.onload = loadDealers;
 let codeReader;
 
 function openScanner(){
-
   document.getElementById("readerBox").style.display = "block";
-
   if(scanning) return;
   scanning = true;
 
   const videoElement = document.getElementById("reader");
-
   const hints = new Map();
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+    ZXing.BarcodeFormat.QR_CODE,
+    ZXing.BarcodeFormat.CODE_128,
+  ]);
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, false); // faster scans
 
-  hints.set(
-    ZXing.DecodeHintType.POSSIBLE_FORMATS,
-    [
-      ZXing.BarcodeFormat.QR_CODE,
-      ZXing.BarcodeFormat.CODE_128,
-      ZXing.BarcodeFormat.CODE_39,
-      ZXing.BarcodeFormat.DATA_MATRIX,
-      
-    ]
-  );
-
-  codeReader = new ZXing.BrowserMultiFormatReader(hints);
+  codeReader = new ZXing.BrowserMultiFormatReader(hints, 200); // 200ms scan interval
 
   let scanLockLocal = false;
   let lastScanLocal = "";
@@ -190,83 +181,49 @@ function openScanner(){
 
   codeReader.decodeFromConstraints(
     {
-      video:{
-        facingMode:{ ideal:"environment" },
-
-        width:{ ideal:640 },
-        height:{ ideal:480 }
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 640 },
+        height: { ideal: 480 }
       }
     },
-
     videoElement,
+    (result, err) => {
+      if (!result) return;
 
-    (result, err)=>{
+      let cleanQR = result.getText().trim().replace(/\s/g,"").replace(/\/\/(1|5|10)/g,"");
 
-      if(!result) return;
-
-      let cleanQR = result
-        .getText()
-        .trim()
-        .replace(/\s/g,"")
-        .replace(/\/\/(1|5|10)/g,"");
-
-      if(
-        cleanQR === lastScanLocal &&
-        Date.now() - lastScanTime < 600
-      ){
-        return;
-      }
-
-      if(scanLockLocal) return;
+      const now = Date.now();
+      if (cleanQR === lastScanLocal && now - lastScanTime < 600) return;
+      if (scanLockLocal) return;
 
       scanLockLocal = true;
-
       lastScanLocal = cleanQR;
-      lastScanTime = Date.now();
+      lastScanTime = now;
 
       beep.currentTime = 0;
       beep.play().catch(()=>{});
 
       fetch(API_URL + "?uid=" + encodeURIComponent(cleanQR))
-      .then(r=>r.json())
-      .then(data=>{
-
-        if(!data.variant){
-
-          alert("❌ Not Found - " + cleanQR);
-
-          setTimeout(()=>{
-            scanLockLocal = false;
-          },300);
-
-          return;
-        }
-
-        if(!items[data.variant]){
-          items[data.variant]={
-            variant:data.variant,
-            qty:1,
-            mrp:Number(data.mrp)||0
-          };
-        }else{
-          items[data.variant].qty++;
-        }
-
-        render();
-
-        setTimeout(()=>{
-          scanLockLocal = false;
-        },1000);
-
-      })
-      .catch(()=>{
-        scanLockLocal = false;
-      });
-
+        .then(r => r.json())
+        .then(data => {
+          if (!data.variant) {
+            alert("❌ Not Found - " + cleanQR);
+            return; // lock resets in finally
+          }
+          if (!items[data.variant]) {
+            items[data.variant] = { variant: data.variant, qty: 1, mrp: Number(data.mrp) || 0 };
+          } else {
+            items[data.variant].qty++;
+          }
+          render();
+        })
+        .catch(() => {}) // lock resets in finally
+        .finally(() => {
+          setTimeout(() => { scanLockLocal = false; }, 300); // ✅ ALWAYS resets, only 300ms
+        });
     }
-
   );
-
 }
   
 /* KEEP ALL YOUR FUNCTIONS SAME BELOW (NO CHANGE) */
