@@ -115,11 +115,9 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 #closeBc:active{background:var(--red)}
 .bc-video-wrap{position:relative;width:100%;height:200px;overflow:hidden}
 #bcVideo{width:100%;height:100%;object-fit:cover;display:block}
-/* vignette */
 .bc-vignette{position:absolute;inset:0;pointer-events:none;background:
   linear-gradient(to bottom,rgba(0,0,0,.55) 0%,transparent 25%,transparent 75%,rgba(0,0,0,.55) 100%),
   linear-gradient(to right,rgba(0,0,0,.45) 0%,transparent 15%,transparent 85%,rgba(0,0,0,.45) 100%)}
-/* scan window */
 .bc-window{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86%;max-width:340px;height:72px;border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.48);z-index:3}
 .bc-corner{position:absolute;width:20px;height:20px;border-color:#a855f7;border-style:solid}
 .bc-corner.tl{top:-1px;left:-1px;border-width:3px 0 0 3px;border-radius:5px 0 0 0}
@@ -196,6 +194,12 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
 .scan-mode-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;border-radius:20px;padding:3px 10px;margin-bottom:8px;letter-spacing:.5px}
 .scan-mode-badge.qr{background:rgba(26,86,219,.08);border:1px solid rgba(26,86,219,.2);color:var(--blue)}
 .scan-mode-badge.bc{background:rgba(124,58,237,.08);border:1px solid rgba(124,58,237,.2);color:#7c3aed}
+
+/* ════ ADD ITEM BOX ════ */
+#addItemBox{display:none;margin-top:10px}
+#addItemBox label{display:block;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px}
+.add-item-row{display:flex;gap:6px;align-items:center}
+#addItemInput{flex:1;padding:10px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;background:#fff}
 </style>
 </head>
 <body>
@@ -218,12 +222,10 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
   </div>
   <div class="header-right">
     <div class="header-date" id="headerDate"></div>
-    <!-- THREE-DOT MENU -->
     <button class="menu-btn" onclick="toggleMenu()" id="menuBtn" aria-label="Options">
       <span></span><span></span><span></span>
     </button>
   </div>
-  <!-- DROPDOWN -->
   <div class="menu-dropdown" id="menuDropdown">
     <div class="menu-item" onclick="switchScanMode('qr')">
       <div class="menu-item-icon qr">📦</div>
@@ -242,10 +244,8 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
   </div>
 </div>
 
-<!-- ════ CACHE BAR ════ -->
 <div id="cacheBar" class="loading">⏳ Loading product cache…</div>
 
-<!-- ════ STEPPER ════ -->
 <div class="stepper">
   <div class="step active" id="step1tab" onclick="goPage(1)">
     <div class="step-num">1</div>
@@ -290,16 +290,13 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
   <div class="card">
     <div class="card-title">Scan &amp; Entry</div>
 
-    <!-- active mode badge -->
     <div id="scanModeBadge" class="scan-mode-badge qr">📦 Product Scanner (QR)</div>
 
     <div class="btn-row">
-      <!-- QR scan button -->
       <button class="btn btn-accent" onclick="openQRScanner()" id="scanQRBtn">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
         Scan QR
       </button>
-      <!-- Barcode scan button -->
       <button class="btn btn-accent2" onclick="openBCScanner()" id="scanBCBtn" style="display:none">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="4" width="3" height="16"/><rect x="7" y="4" width="1" height="16"/><rect x="10" y="4" width="2" height="16"/><rect x="15" y="4" width="1" height="16"/><rect x="18" y="4" width="3" height="16"/></svg>
         Scan Barcode
@@ -310,7 +307,6 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
       </button>
     </div>
 
-    <!-- QR READER (html5-qrcode) -->
     <div id="readerBox">
       <div class="scanner-hdr">
         <span><div class="pulse-dot"></div>QR Scanner Active</span>
@@ -320,7 +316,6 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
       <div class="scan-fb" id="scanFeedback">Point camera at QR code</div>
     </div>
 
-    <!-- BARCODE READER (native BarcodeDetector / ZXing) -->
     <div id="bcBox">
       <div class="bc-hdr">
         <span><div class="pulse-dot" style="background:#a855f7"></div>Barcode Scanner Active</span>
@@ -373,6 +368,17 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
           </tr>
         </tfoot>
       </table>
+    </div>
+
+    <!-- MANUAL ADD ITEM BOX — fixed, always present in manual mode -->
+    <div id="addItemBox">
+      <label>Add Item (type to search Stock Sheet)</label>
+      <div class="add-item-row">
+        <input list="stockVariantList" id="addItemInput" placeholder="Type variant name..." autocomplete="off"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addItemFromInput();}">
+        <button class="btn btn-accent" style="white-space:nowrap;padding:10px 16px" onclick="addItemFromInput()">＋ Add</button>
+      </div>
+      <datalist id="stockVariantList"></datalist>
     </div>
   </div>
 
@@ -435,11 +441,8 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
 <div id="bill"></div>
 
 <script>
-/* ════════════════════════════════════════════════════════
-   CONFIG
-   ════════════════════════════════════════════════════════ */
+/* ════ CONFIG ════ */
 const BILL_NUMBER_OFFSET = 0;
-// ▼▼▼  PASTE YOUR NEW WEB APP DEPLOYMENT URL HERE  ▼▼▼
 const API_URL = "https://script.google.com/macros/s/AKfycbz_VAjxgrMJHPYWmJQAVJKiHtPo7z705wPVNMMXQk0cNj1PcU-9YZ9f7MyjNdP3OjRC/exec";
 
 /* ════ STATE ════ */
@@ -450,35 +453,35 @@ let manualMode  = false;
 let photoData   = "";
 let camStream   = null;
 let currentPage = 1;
-let activeScanMode = "qr"; // "qr" | "barcode"
+let activeScanMode = "qr";
 
-/* ════ CACHE ════ */
+/* ════ CACHE ════
+   stockCache    : keyed by UID  → {variant, mrp}   (used by scanners)
+   variantCache  : keyed by lowercase variant name → {variant, mrp}  (manual add MRP autofill)
+   variantNames  : sorted list of all variant names (autocomplete suggestions)
+   This dual cache is the FIX — manual add no longer depends on a UID existing. */
 let stockCache    = {};
+let variantCache  = {};
+let variantNames  = [];
 let cacheReady    = false;
 
 /* ════ BARCODE ENGINE ════ */
-let bcDetector  = null;   // native BarcodeDetector instance
-let bcZXing     = null;   // ZXing fallback
+let bcDetector  = null;
+let bcZXing     = null;
 let bcUseZXing  = false;
 let bcStream    = null;
-let bcInterval  = null;   // throttled interval (not rAF) to prevent slowdown
-let bcDecoding  = false;  // true while an async decode call is in-flight
+let bcInterval  = null;
+let bcDecoding  = false;
 
-/* ════ SMART DEDUP ═══════════════════════════════════════════════════
-   SAME_CODE_COOLDOWN : same code cannot fire again within this window.
-   Different codes are accepted INSTANTLY — rapid multi-item scanning
-   stays fast.  Prevents "same barcode fires 3× while held in frame".
-   ════════════════════════════════════════════════════════════════════ */
-const SAME_CODE_COOLDOWN = 2500; // ms before same barcode re-fires
-const SAME_QR_COOLDOWN   = 2500; // same for QR mode
-let lastBcCode  = "";            // last raw barcode value accepted
-let lastBcTime  = 0;             // Date.now() of last accepted barcode
-let lastQrCode  = "";            // last QR value accepted
-let lastQrTime  = 0;             // Date.now() of last accepted QR
+/* ════ SMART DEDUP ════ */
+const SAME_CODE_COOLDOWN = 2000; // spare-part barcode (fast)
+const SAME_QR_COOLDOWN   = 3500; // product QR (slower — prevents multi-add of same product)
+let lastBcCode  = "";
+let lastBcTime  = 0;
+let lastQrCode  = "";
+let lastQrTime  = 0;
 
-/* ════════════════════════════════════════════════════════
-   BEEP — realistic scanner chirp
-   ════════════════════════════════════════════════════════ */
+/* ════ BEEP ════ */
 const beep = (() => {
   try {
     const actx = new (window.AudioContext || window.webkitAudioContext)();
@@ -499,9 +502,7 @@ const beep = (() => {
   } catch(e){ return ()=>{}; }
 })();
 
-/* ════════════════════════════════════════════════════════
-   INIT
-   ════════════════════════════════════════════════════════ */
+/* ════ INIT ════ */
 window.onload = function() {
   const today = new Date();
   document.getElementById("date").value = today.toISOString().split("T")[0];
@@ -510,16 +511,14 @@ window.onload = function() {
   loadDealers();
   loadSO();
   loadStockCache();
-  // Pre-init barcode detector in background so first scan is instant
   initBarcodeDetector();
-  // Close menu on outside tap
   document.addEventListener("click", e => {
     if (!e.target.closest("#menuBtn") && !e.target.closest("#menuDropdown"))
       document.getElementById("menuDropdown").classList.remove("open");
   });
 };
 
-/* ════ DEALERS — from Master Dealer column A (A2:A) ════ */
+/* ════ DEALERS — Master Dealer column A ════ */
 function loadDealers() {
   fetch(API_URL+"?type=dealers")
     .then(r=>r.json())
@@ -530,13 +529,12 @@ function loadDealers() {
     }).catch(()=>{});
 }
 
-/* ════ SALES OFFICERS (SO) — from Master Dealer column B (B2:B) ════ */
+/* ════ SO — Master Dealer column B ════ */
 function loadSO() {
   fetch(API_URL+"?type=so")
     .then(r=>r.json())
     .then(data=>{
       const sel=document.getElementById("dealer");
-      // Keep the placeholder option, remove any previously loaded ones
       sel.innerHTML='<option value="">— Select SO —</option>';
       data.forEach(name=>{
         const o=document.createElement("option");
@@ -546,19 +544,35 @@ function loadSO() {
     }).catch(()=>{});
 }
 
-/* ════ CACHE ════ */
+/* ════ CACHE — builds BOTH the UID cache and the variant cache ════ */
 function loadStockCache() {
   const bar=document.getElementById("cacheBar");
   bar.className="loading"; bar.textContent="⏳ Loading product cache…";
   fetch(API_URL+"?type=stockcache")
     .then(r=>r.json())
     .then(data=>{
-      stockCache={};
-      if(Array.isArray(data))
-        data.forEach(row=>{ if(row.uid) stockCache[String(row.uid).trim()]={variant:row.variant||"",mrp:Number(row.mrp)||0}; });
+      stockCache={}; variantCache={}; variantNames=[];
+      const seen={};
+      if(Array.isArray(data)){
+        data.forEach(row=>{
+          const uid=String(row.uid||"").trim();
+          const variant=String(row.variant||"").trim();
+          const mrp=Number(row.mrp)||0;
+          // UID cache (scanners) — only rows that have a UID
+          if(uid) stockCache[uid]={variant:variant,mrp:mrp};
+          // Variant cache + names (manual add) — EVERY row that has a variant name
+          if(variant){
+            const lc=variant.toLowerCase();
+            variantCache[lc]={variant:variant,mrp:mrp};
+            if(!seen[lc]){ seen[lc]=1; variantNames.push(variant); }
+          }
+        });
+      }
+      variantNames.sort();
       cacheReady=true;
       const count=Object.keys(stockCache).length;
-      bar.className="ready"; bar.textContent=`✅ ${count} products loaded — scanner ready`;
+      const vcount=variantNames.length;
+      bar.className="ready"; bar.textContent=`✅ ${count} products / ${vcount} variants loaded`;
       setTimeout(()=>{bar.style.display="none";},3000);
     })
     .catch(()=>{
@@ -567,7 +581,7 @@ function loadStockCache() {
     });
 }
 
-/* ════ LOOKUP ════ */
+/* ════ UID LOOKUP (scanners) ════ */
 function lookupUID(uid) {
   const key=String(uid).trim();
   if(cacheReady && stockCache[key]) return Promise.resolve(stockCache[key]);
@@ -576,52 +590,43 @@ function lookupUID(uid) {
     .then(d=>d.variant?d:null);
 }
 
-/* ════════════════════════════════════════════════════════
-   SPARE PART BARCODE CLEANER
-   Strips //1 //5 //10 (and /1 /5 /10) from the raw barcode.
-   ════════════════════════════════════════════════════════ */
-function cleanBarcodeValue(raw) {
-  // Remove trailing //N or /N where N is one or more digits
-  return raw.replace(/\/{1,2}\d+$/, "").trim();
+/* ════ VARIANT LOOKUP (manual add) — fast, case-insensitive ════ */
+function lookupMrpByVariant(name){
+  const target=String(name).trim().toLowerCase();
+  if(!target) return null;
+  if(variantCache[target]){
+    return { variant: variantCache[target].variant, mrp: Number(variantCache[target].mrp)||0 };
+  }
+  return null;
 }
 
-/* Returns { code, qty } from a raw barcode:
-   • "ABC//1"  → { code:"ABC", qty:1 }
-   • "ABC//5"  → { code:"ABC", qty:5 }
-   • "ABC//10" → { code:"ABC", qty:10 }
-   • "ABC"     → { code:"ABC", qty:1 }  (no suffix = default 1)
-   Only the exact suffixes //1, //5, //10 (or /1 /5 /10) set a quantity. */
+/* ════ BARCODE CLEANER + SUFFIX QTY ════ */
+function cleanBarcodeValue(raw) {
+  return raw.replace(/\/{1,2}\d+$/, "").trim();
+}
 function parseBarcodeSuffix(raw) {
   const s = String(raw).trim();
-  const m = s.match(/\/{1,2}(1|5|10)$/);   // matches //1 //5 //10 or /1 /5 /10
+  const m = s.match(/\/{1,2}(1|5|10)$/);
   if (m) {
-    const qty = Number(m[1]);              // 1, 5, or 10
+    const qty = Number(m[1]);
     const code = s.replace(/\/{1,2}(1|5|10)$/, "").trim();
     return { code: code, qty: qty };
   }
-  // No recognised suffix → strip any other trailing /N just in case, qty defaults to 1
   return { code: cleanBarcodeValue(s), qty: 1 };
 }
 
-/* ════════════════════════════════════════════════════════
-   THREE-DOT MENU
-   ════════════════════════════════════════════════════════ */
+/* ════ THREE-DOT MENU ════ */
 function toggleMenu() {
   document.getElementById("menuDropdown").classList.toggle("open");
 }
-
 function switchScanMode(mode) {
   document.getElementById("menuDropdown").classList.remove("open");
-
-  // Close any open scanner
   if(qrScanning) closeQRScanner();
   if(bcStream)   closeBCScanner();
-
   activeScanMode = mode;
-  const badge    = document.getElementById("scanModeBadge");
-  const qrBtn    = document.getElementById("scanQRBtn");
-  const bcBtn    = document.getElementById("scanBCBtn");
-
+  const badge=document.getElementById("scanModeBadge");
+  const qrBtn=document.getElementById("scanQRBtn");
+  const bcBtn=document.getElementById("scanBCBtn");
   if(mode === "qr") {
     badge.className="scan-mode-badge qr"; badge.textContent="📦 Product Scanner (QR)";
     qrBtn.style.display=""; bcBtn.style.display="none";
@@ -633,27 +638,20 @@ function switchScanMode(mode) {
   }
 }
 
-/* ════════════════════════════════════════════════════════
-   QR SCANNER (html5-qrcode) — Product Mode
-   Identical to original, same speed
-   ════════════════════════════════════════════════════════ */
+/* ════ QR SCANNER — Product Mode (SLOWED to fps:8 + 3500ms cooldown) ════ */
 function openQRScanner() {
   document.getElementById("readerBox").style.display="block";
   if(qrScanning) return;
-
   qrScanner = new Html5Qrcode("reader",{verbose:false});
   qrScanner.start(
     {facingMode:"environment"},
-    {fps:30, qrbox:{width:220,height:220}, aspectRatio:1.0, disableFlip:false,
+    {fps:8, qrbox:{width:220,height:220}, aspectRatio:1.0, disableFlip:false,
      experimentalFeatures:{useBarCodeDetectorIfSupported:true}},
     code => {
       const now = Date.now();
-      // Block if SAME code scanned within cooldown window
       if(code === lastQrCode && (now - lastQrTime) < SAME_QR_COOLDOWN) return;
-      // Accept — record immediately so rapid re-fires are blocked
       lastQrCode = code;
       lastQrTime = now;
-
       const flash=document.getElementById("scanFlash");
       flash.classList.add("flash"); setTimeout(()=>flash.classList.remove("flash"),110);
       beep();
@@ -663,8 +661,7 @@ function openQRScanner() {
           if(!data||!data.variant){
             showToast("Not found: "+code.substring(0,14),"error");
             document.getElementById("scanFeedback").textContent="❌ Item not found";
-            // Reset so the same unknown code can be retried after cooldown
-            lastQrTime = now - SAME_QR_COOLDOWN + 3000; // allow retry after 3s
+            lastQrTime = now - SAME_QR_COOLDOWN + 3000;
           } else {
             addOrIncrItem(data.variant, Number(data.mrp)||0);
             document.getElementById("scanFeedback").textContent="✅ "+data.variant+" ×"+items[data.variant].qty;
@@ -674,14 +671,13 @@ function openQRScanner() {
         .catch(()=>{
           showToast("Lookup error","error");
           document.getElementById("scanFeedback").textContent="❌ Error";
-          lastQrTime = 0; // allow immediate retry on network error
+          lastQrTime = 0;
         });
     },
     ()=>{}
   );
   qrScanning=true;
 }
-
 function closeQRScanner() {
   if(qrScanner && qrScanning) {
     qrScanner.stop()
@@ -690,52 +686,29 @@ function closeQRScanner() {
   }
 }
 
-/* ════════════════════════════════════════════════════════
-   BARCODE SCANNER ENGINE INIT
-   Called once on page load in background — so first open
-   is instant with no "initialising" delay.
-   Priority: native BarcodeDetector → ZXing fallback
-   ════════════════════════════════════════════════════════ */
+/* ════ BARCODE ENGINE INIT ════ */
 async function initBarcodeDetector() {
   if("BarcodeDetector" in window) {
     try {
       const supported = await BarcodeDetector.getSupportedFormats();
       const has1D = supported.some(f=>["code_128","code_39","ean_13","upc_a","itf","codabar"].includes(f));
-      if(has1D) {
-        bcDetector = new BarcodeDetector({formats: supported});
-        return;
-      }
+      if(has1D) { bcDetector = new BarcodeDetector({formats: supported}); return; }
     } catch(e){}
   }
-  // Load ZXing fallback
   return new Promise(resolve=>{
     const s=document.createElement("script");
     s.src="https://cdnjs.cloudflare.com/ajax/libs/zxing-js/0.20.0/index.min.js";
-    s.onload=()=>{
-      try { bcZXing=new ZXing.BrowserMultiFormatReader(); bcUseZXing=true; } catch(e){}
-      resolve();
-    };
+    s.onload=()=>{ try { bcZXing=new ZXing.BrowserMultiFormatReader(); bcUseZXing=true; } catch(e){} resolve(); };
     s.onerror=()=>resolve();
     document.head.appendChild(s);
   });
 }
 
-/* ════════════════════════════════════════════════════════
-   BARCODE SCANNER OPEN / CLOSE — Spare Part Mode
-
-   KEY SPEED FIX:
-   Instead of requestAnimationFrame (which fires ~60fps and
-   causes async decode pile-up + slowdown), we use
-   setInterval at 80ms (~12fps decode attempts).
-   Camera still runs at full frame rate — only the DECODE
-   call is throttled. This prevents the main thread from
-   being blocked by stacked async calls.
-   ════════════════════════════════════════════════════════ */
+/* ════ BARCODE SCANNER OPEN/CLOSE — Spare Part Mode (fast: 25ms) ════ */
 async function openBCScanner() {
   const box = document.getElementById("bcBox");
   box.style.display="block";
-  if(bcStream) return; // already running
-
+  if(bcStream) return;
   try {
     bcStream = await navigator.mediaDevices.getUserMedia({
       video:{facingMode:{ideal:"environment"}, width:{ideal:1280}, height:{ideal:720}}
@@ -749,111 +722,69 @@ async function openBCScanner() {
     bcStream=null;
     return;
   }
-
   document.getElementById("bcFeedback").textContent="Point camera at barcode";
-  bcDecoding=false;
-  lastBcCode="";   // reset dedup on each scanner open
-  lastBcTime=0;
-
-  // Throttled interval — decode every 40ms (~25 decode attempts/sec)
-  // Fast enough for quick 1D barcode detection, no pile-up
-  bcInterval = setInterval(()=>{ bcDecodeFrame(); }, 40);
-
-  // Keep screen awake
+  bcDecoding=false; lastBcCode=""; lastBcTime=0;
+  bcInterval = setInterval(()=>{ bcDecodeFrame(); }, 25);
   try{ if("wakeLock" in navigator) navigator.wakeLock.request("screen"); }catch(e){}
 }
-
 function closeBCScanner() {
   if(bcInterval){ clearInterval(bcInterval); bcInterval=null; }
   if(bcStream){ bcStream.getTracks().forEach(t=>t.stop()); bcStream=null; }
   const vid=document.getElementById("bcVideo");
   vid.srcObject=null;
   document.getElementById("bcBox").style.display="none";
-  bcDecoding=false;
-  lastBcCode=""; lastBcTime=0;
+  bcDecoding=false; lastBcCode=""; lastBcTime=0;
 }
 
-/* ════════════════════════════════════════════════════════
-   BARCODE DECODE FRAME
-   - bcDecoding flag prevents overlapping async calls
-   - Smart dedup: same code blocked for SAME_CODE_COOLDOWN,
-     different code accepted instantly
-   ════════════════════════════════════════════════════════ */
+/* ════ BARCODE DECODE FRAME ════ */
 async function bcDecodeFrame() {
-  // Skip if a decode call is still running (prevents async pile-up)
   if(bcDecoding) return;
   const vid=document.getElementById("bcVideo");
   if(!vid || vid.readyState<2 || vid.videoWidth===0) return;
-
   bcDecoding=true;
   const cvs=document.getElementById("bcCanvas");
   const ctx=cvs.getContext("2d",{willReadFrequently:true});
-
-  // Decode at 960px max width — fast decode, still sharp enough for 1D barcodes
   const MAX_W = 960;
   const scale = vid.videoWidth > MAX_W ? MAX_W / vid.videoWidth : 1;
   cvs.width  = Math.round(vid.videoWidth  * scale);
   cvs.height = Math.round(vid.videoHeight * scale);
   ctx.drawImage(vid, 0, 0, cvs.width, cvs.height);
-
   let code=null;
   try {
     if(!bcUseZXing && bcDetector) {
       const results=await bcDetector.detect(cvs);
       if(results.length>0) code=results[0].rawValue;
     } else if(bcUseZXing && bcZXing) {
-      try {
-        const res=await bcZXing.decodeFromCanvas(cvs);
-        if(res) code=res.getText();
-      } catch(e){ /* NotFoundException = no barcode in frame, normal */ }
+      try { const res=await bcZXing.decodeFromCanvas(cvs); if(res) code=res.getText(); } catch(e){}
     }
   } catch(e){}
-
-  bcDecoding=false; // release immediately so next frame can be attempted
-
+  bcDecoding=false;
   if(code) {
     const now = Date.now();
     const rawCode = String(code);
-
-    // ── SMART DEDUP ──────────────────────────────────────────
-    // Same code within cooldown window → silently skip (no beep,
-    // no toast, no UI update — camera just keeps scanning)
     if(rawCode === lastBcCode && (now - lastBcTime) < SAME_CODE_COOLDOWN) return;
-
-    // Different code OR cooldown expired → accept and record
     lastBcCode = rawCode;
     lastBcTime = now;
     onBarcodeFound(rawCode);
   }
 }
 
-/* ════════════════════════════════════════════════════════
-   ON BARCODE FOUND — Spare Part Mode
-   1. Clean suffix (//1, //5, //10 etc.)
-   2. Lookup from cache/sheet
-   3. Add to items table
-   ════════════════════════════════════════════════════════ */
+/* ════ ON BARCODE FOUND — Spare Part Mode ════ */
 function onBarcodeFound(rawCode) {
   beep();
-  // Flash inside barcode viewfinder
   const fl=document.getElementById("bcFlash");
   fl.classList.add("pop"); setTimeout(()=>fl.classList.remove("pop"),100);
-  // Full-screen flash
   const sf=document.getElementById("scanFlash");
   sf.classList.add("flash"); setTimeout(()=>sf.classList.remove("flash"),110);
-
-  // Parse the //1 //5 //10 suffix → clean code + quantity to add
   const parsed = parseBarcodeSuffix(rawCode);
   const cleanCode = parsed.code;
-  const addQty = parsed.qty; // 1, 5, or 10
+  const addQty = parsed.qty;
   document.getElementById("bcFeedback").textContent="🔍 "+cleanCode.substring(0,22)+"…";
-
   lookupUID(cleanCode)
     .then(data=>{
       if(!data||!data.variant){
         showToast("Not found: "+cleanCode.substring(0,16),"error",2500);
         document.getElementById("bcFeedback").textContent="❌ Not found: "+cleanCode.substring(0,18);
-        // Allow the same code to be retried after 3s on a not-found
         lastBcTime = Date.now() - SAME_CODE_COOLDOWN + 3000;
       } else {
         addOrIncrItem(data.variant, Number(data.mrp)||0, addQty);
@@ -864,13 +795,11 @@ function onBarcodeFound(rawCode) {
     .catch(()=>{
       showToast("Lookup error","error");
       document.getElementById("bcFeedback").textContent="❌ Lookup error";
-      lastBcTime=0; // network error → allow immediate retry
+      lastBcTime=0;
     });
 }
 
-/* ════ SHARED ITEM ADD/INCREMENT ════
-   addQty defaults to 1 (used by QR scanner). Barcode scanner passes
-   1, 5, or 10 based on the //N suffix.                                */
+/* ════ SHARED ITEM ADD/INCREMENT ════ */
 function addOrIncrItem(variant, mrp, addQty) {
   const q = Number(addQty) || 1;
   if(!items[variant]) items[variant]={variant,qty:q,mrp,exceeded:false};
@@ -878,22 +807,27 @@ function addOrIncrItem(variant, mrp, addQty) {
   render();
 }
 
-/* ════════════════════════════════════════════════════════
-   MANUAL EDIT
-   ════════════════════════════════════════════════════════ */
+/* ════ MANUAL EDIT TOGGLE — shows/hides the fixed Add Item box ════ */
 function toggleEdit() {
   manualMode=!manualMode;
   document.getElementById("editHead").style.display=manualMode?"":"none";
   document.getElementById("tActionFoot").style.display=manualMode?"":"none";
+  document.getElementById("addItemBox").style.display=manualMode?"block":"none";
+  if(manualMode) populateVariantDatalist();
   document.getElementById("editBtn").innerHTML=manualMode
     ? `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg> Lock`
     : `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Manual`;
   render();
 }
 
-/* ════════════════════════════════════════════════════════
-   RENDER TABLE
-   ════════════════════════════════════════════════════════ */
+/* ════ AUTOCOMPLETE DATALIST ════ */
+function populateVariantDatalist(){
+  const dl=document.getElementById("stockVariantList");
+  if(!dl) return;
+  dl.innerHTML=variantNames.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join("");
+}
+
+/* ════ RENDER TABLE ════ */
 function render() {
   const keys=Object.keys(items);
   document.getElementById("itemCount").textContent=keys.length;
@@ -924,7 +858,6 @@ function render() {
       ${manualMode?`<td><button class="btn btn-danger btn-sm" onclick="removeItem('${key}')">✕</button></td>`:`<td></td>`}
     </tr>`;
   });
-  if(manualMode) html+=`<tr><td colspan="5" style="padding:6px"><button class="btn btn-outline btn-sm" style="width:100%" onclick="addItem()">＋ Add Item</button></td></tr>`;
   document.getElementById("tbody").innerHTML=html;
   document.getElementById("tQty").textContent=tq;
   document.getElementById("tMrp").textContent="₹"+tm.toLocaleString("en-IN");
@@ -932,37 +865,28 @@ function render() {
   document.getElementById("tQtyTop").textContent=tq;
 }
 
-/* ════ MANUAL ADD ITEM — auto-fills MRP from Stock Sheet by variant name ════
-   Matches the typed name against Stock Sheet column B (variant) case-insensitively
-   (so "abc" matches "ABC"). If found, auto-fills that variant's MRP.            */
-function lookupMrpByVariant(name){
-  const target=String(name).trim().toLowerCase();
-  if(!target) return null;
-  // stockCache is keyed by UID, each value = {variant, mrp}
-  for(const key in stockCache){
-    const entry=stockCache[key];
-    if(entry && String(entry.variant).trim().toLowerCase()===target){
-      return { variant: entry.variant, mrp: Number(entry.mrp)||0 };
-    }
-  }
-  return null;
-}
-
-function addItem(){
-  const n=prompt("Variant Name:");
-  if(!n) return;
-  const typed=n.trim();
+/* ════ ADD ITEM FROM INPUT ════
+   - Suggests variants from Stock Sheet col B (datalist).
+   - Auto-fills MRP when found.
+   - Does NOT add anything if not found (just shows message). */
+function addItemFromInput(){
+  const input=document.getElementById("addItemInput");
+  if(!input) return;
+  const typed=input.value.trim();
+  if(!typed){ showToast("Type a variant name","warning",1800); return; }
   const found=lookupMrpByVariant(typed);
   if(found){
-    // Use the sheet's exact variant spelling + its MRP
-    items[found.variant]={variant:found.variant,qty:1,mrp:found.mrp,exceeded:false};
-    showToast("Found: "+found.variant+" — MRP ₹"+found.mrp,"success",1800);
+    if(!items[found.variant]) items[found.variant]={variant:found.variant,qty:1,mrp:found.mrp,exceeded:false};
+    else items[found.variant].qty++;
+    showToast("Added: "+found.variant+" — MRP ₹"+found.mrp,"success",1800);
+    input.value="";
+    render();
+    setTimeout(()=>{ const el=document.getElementById("addItemInput"); if(el) el.focus(); },50);
   } else {
-    // Not in stock sheet — add as-is with MRP 0 (user can edit)
-    items[typed]={variant:typed,qty:1,mrp:0,exceeded:false};
-    showToast("\""+typed+"\" not in Stock Sheet — MRP set to 0","warning",2200);
+    showToast("\""+typed+"\" not found in Stock Sheet","error",2500);
+    input.value="";
+    setTimeout(()=>{ const el=document.getElementById("addItemInput"); if(el) el.focus(); },50);
   }
-  render();
 }
 function removeItem(k){delete items[k];render();}
 
@@ -987,7 +911,6 @@ function goPage(n){
   if(n===2) refreshSummary();
   window.scrollTo(0,0);
 }
-
 function goToPage2(){
   if(!document.getElementById("challan").value.trim()){showToast("Enter Challan No.","error");return;}
   if(!document.getElementById("dealer").value){showToast("Select Sales Officer","error");return;}
@@ -996,7 +919,6 @@ function goToPage2(){
   if(Object.keys(items).length===0){showToast("Add at least one item","error");return;}
   goPage(2);
 }
-
 function refreshSummary(){
   const ch=document.getElementById("challan").value,so=document.getElementById("dealer").value;
   const dn=document.getElementById("dealerName").value,dt=document.getElementById("date").value;
@@ -1026,7 +948,7 @@ function checkFields(){
   return true;
 }
 
-/* ════ CAMERA (confirmation photo) ════ */
+/* ════ CAMERA ════ */
 function openCamera(){
   navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1280},height:{ideal:720}}})
     .then(s=>{
@@ -1061,7 +983,7 @@ function retakePhoto(){
   openCamera();
 }
 
-/* ════ DOWNLOAD BILL ════ */
+/* ════ DOWNLOAD BILL (with Total column) ════ */
 function downloadBill(matchedItems){
   const ch=document.getElementById("challan").value,so=document.getElementById("dealer").value;
   const dn=document.getElementById("dealerName").value,dt=document.getElementById("date").value;
@@ -1112,20 +1034,16 @@ function downloadBill(matchedItems){
   });
 }
 
-/* ════════════════════════════════════════════════════════
-   SUBMIT
-   ════════════════════════════════════════════════════════ */
+/* ════ SUBMIT ════ */
 function submitData(){
   if(!checkFields()) return;
   document.getElementById("processingOverlay").classList.add("active");
   document.getElementById("submitBtn").disabled=true;
-
   const challanVal=document.getElementById("challan").value.trim();
   const soVal=document.getElementById("dealer").value.trim();
   const dealerVal=document.getElementById("dealerName").value.trim();
   const dateVal=document.getElementById("date").value;
   const cleanItems=Object.values(items).map(i=>({variant:String(i.variant).trim(),qty:Number(i.qty)||0,mrp:Number(i.mrp)||0}));
-
   fetch(API_URL,{
     method:"POST",
     body:new URLSearchParams({data:JSON.stringify({
@@ -1138,10 +1056,8 @@ function submitData(){
     let data;
     try{data=JSON.parse(text);}catch{throw new Error("Invalid server response");}
     if(data.status!=="success") throw new Error(data.message||"Server error");
-
     const matchedForBill=[];
     let newItems={};
-
     (data.matched||[]).forEach(m=>{
       if(m.qtyAccepted>0) matchedForBill.push({variant:m.variant,qty:m.qtyAccepted,mrp:m.mrp});
       if(m.qtyExceeded>0) newItems[m.variant]={variant:m.variant,qty:m.qtyExceeded,mrp:m.mrp,exceeded:true};
@@ -1149,13 +1065,10 @@ function submitData(){
     (data.notMatched||[]).forEach(i=>{
       newItems[i.variant]={variant:i.variant,qty:i.qty,mrp:i.mrp,exceeded:false};
     });
-
     items=newItems; render();
     if(matchedForBill.length>0) downloadBill(matchedForBill);
-
     const exceedCount=(data.matched||[]).filter(m=>m.qtyExceeded>0).length;
     const noMatchCount=(data.notMatched||[]).length;
-
     if(exceedCount+noMatchCount===0){
       showToast("All items submitted successfully!","success",4000);
       setTimeout(()=>{
