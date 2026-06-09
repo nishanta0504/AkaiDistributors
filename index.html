@@ -356,17 +356,19 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
             <th style="text-align:left">Variant</th>
             <th>Qty</th>
             <th>MRP ₹</th>
+            <th>Total ₹</th>
             <th id="editHead" style="display:none">Act</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="4"><div class="empty-state"><svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>No items yet.<br>Scan or add manually.</p></div></td></tr>
+          <tr><td colspan="5"><div class="empty-state"><svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>No items yet.<br>Scan or add manually.</p></div></td></tr>
         </tbody>
         <tfoot>
           <tr class="tfoot-row">
             <td><b>TOTAL</b></td>
             <td id="tQty">0</td>
             <td id="tMrp">₹0</td>
+            <td id="tTotal">₹0</td>
             <td id="tActionFoot" style="display:none"></td>
           </tr>
         </tfoot>
@@ -576,12 +578,29 @@ function lookupUID(uid) {
 
 /* ════════════════════════════════════════════════════════
    SPARE PART BARCODE CLEANER
-   Strips //1  //5  //10  (and variants like /1 /5 /10)
-   from the raw barcode value before lookup.
+   Strips //1 //5 //10 (and /1 /5 /10) from the raw barcode.
    ════════════════════════════════════════════════════════ */
 function cleanBarcodeValue(raw) {
   // Remove trailing //N or /N where N is one or more digits
   return raw.replace(/\/{1,2}\d+$/, "").trim();
+}
+
+/* Returns { code, qty } from a raw barcode:
+   • "ABC//1"  → { code:"ABC", qty:1 }
+   • "ABC//5"  → { code:"ABC", qty:5 }
+   • "ABC//10" → { code:"ABC", qty:10 }
+   • "ABC"     → { code:"ABC", qty:1 }  (no suffix = default 1)
+   Only the exact suffixes //1, //5, //10 (or /1 /5 /10) set a quantity. */
+function parseBarcodeSuffix(raw) {
+  const s = String(raw).trim();
+  const m = s.match(/\/{1,2}(1|5|10)$/);   // matches //1 //5 //10 or /1 /5 /10
+  if (m) {
+    const qty = Number(m[1]);              // 1, 5, or 10
+    const code = s.replace(/\/{1,2}(1|5|10)$/, "").trim();
+    return { code: code, qty: qty };
+  }
+  // No recognised suffix → strip any other trailing /N just in case, qty defaults to 1
+  return { code: cleanBarcodeValue(s), qty: 1 };
 }
 
 /* ════════════════════════════════════════════════════════
@@ -823,7 +842,10 @@ function onBarcodeFound(rawCode) {
   const sf=document.getElementById("scanFlash");
   sf.classList.add("flash"); setTimeout(()=>sf.classList.remove("flash"),110);
 
-  const cleanCode = cleanBarcodeValue(rawCode);
+  // Parse the //1 //5 //10 suffix → clean code + quantity to add
+  const parsed = parseBarcodeSuffix(rawCode);
+  const cleanCode = parsed.code;
+  const addQty = parsed.qty; // 1, 5, or 10
   document.getElementById("bcFeedback").textContent="🔍 "+cleanCode.substring(0,22)+"…";
 
   lookupUID(cleanCode)
@@ -834,9 +856,9 @@ function onBarcodeFound(rawCode) {
         // Allow the same code to be retried after 3s on a not-found
         lastBcTime = Date.now() - SAME_CODE_COOLDOWN + 3000;
       } else {
-        addOrIncrItem(data.variant, Number(data.mrp)||0);
+        addOrIncrItem(data.variant, Number(data.mrp)||0, addQty);
         document.getElementById("bcFeedback").textContent="✅ "+data.variant+" ×"+items[data.variant].qty;
-        showToast(data.variant+" ×"+items[data.variant].qty,"success",1600);
+        showToast(data.variant+" +"+addQty+" (×"+items[data.variant].qty+")","success",1600);
       }
     })
     .catch(()=>{
@@ -846,10 +868,13 @@ function onBarcodeFound(rawCode) {
     });
 }
 
-/* ════ SHARED ITEM ADD/INCREMENT ════ */
-function addOrIncrItem(variant, mrp) {
-  if(!items[variant]) items[variant]={variant,qty:1,mrp,exceeded:false};
-  else items[variant].qty++;
+/* ════ SHARED ITEM ADD/INCREMENT ════
+   addQty defaults to 1 (used by QR scanner). Barcode scanner passes
+   1, 5, or 10 based on the //N suffix.                                */
+function addOrIncrItem(variant, mrp, addQty) {
+  const q = Number(addQty) || 1;
+  if(!items[variant]) items[variant]={variant,qty:q,mrp,exceeded:false};
+  else items[variant].qty += q;
   render();
 }
 
@@ -873,16 +898,18 @@ function render() {
   const keys=Object.keys(items);
   document.getElementById("itemCount").textContent=keys.length;
   if(keys.length===0){
-    document.getElementById("tbody").innerHTML=`<tr><td colspan="4"><div class="empty-state"><svg width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>No items yet.<br>Scan or add manually.</p></div></td></tr>`;
+    document.getElementById("tbody").innerHTML=`<tr><td colspan="5"><div class="empty-state"><svg width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>No items yet.<br>Scan or add manually.</p></div></td></tr>`;
     document.getElementById("tQty").textContent="0";
     document.getElementById("tMrp").textContent="₹0";
+    document.getElementById("tTotal").textContent="₹0";
     document.getElementById("tQtyTop").textContent="0";
     return;
   }
-  let html="",tq=0,tm=0;
+  let html="",tq=0,tm=0,tt=0;
   keys.forEach(key=>{
     const i=items[key], q=Number(i.qty)||0, m=Number(i.mrp)||0;
-    tq+=q; tm+=q*m;
+    const lineTotal=q*m;
+    tq+=q; tm+=m; tt+=lineTotal;
     const excBadge=i.exceeded?`<span class="exceeded-badge">⚠ Qty Exceeded</span>`:"";
     const filledBadge=i.alreadyFull?`<span class="filled-badge">🔒 Already Filled</span>`:"";
     const rowClass=i.exceeded?"exceeded-row":i.alreadyFull?"filled-row":"";
@@ -893,17 +920,50 @@ function render() {
       </td>
       <td>${manualMode?`<input type="number" value="${q}" onchange="items['${key}'].qty=Number(this.value);render()">`:`<b>${q}</b>`}</td>
       <td>${manualMode?`<input type="number" value="${m}" onchange="items['${key}'].mrp=Number(this.value);render()">`:`₹${m}`}</td>
+      <td><b>₹${lineTotal.toLocaleString("en-IN")}</b></td>
       ${manualMode?`<td><button class="btn btn-danger btn-sm" onclick="removeItem('${key}')">✕</button></td>`:`<td></td>`}
     </tr>`;
   });
-  if(manualMode) html+=`<tr><td colspan="4" style="padding:6px"><button class="btn btn-outline btn-sm" style="width:100%" onclick="addItem()">＋ Add Item</button></td></tr>`;
+  if(manualMode) html+=`<tr><td colspan="5" style="padding:6px"><button class="btn btn-outline btn-sm" style="width:100%" onclick="addItem()">＋ Add Item</button></td></tr>`;
   document.getElementById("tbody").innerHTML=html;
   document.getElementById("tQty").textContent=tq;
   document.getElementById("tMrp").textContent="₹"+tm.toLocaleString("en-IN");
+  document.getElementById("tTotal").textContent="₹"+tt.toLocaleString("en-IN");
   document.getElementById("tQtyTop").textContent=tq;
 }
 
-function addItem(){const n=prompt("Variant Name:");if(!n)return;items[n.trim()]={variant:n.trim(),qty:1,mrp:0,exceeded:false};render();}
+/* ════ MANUAL ADD ITEM — auto-fills MRP from Stock Sheet by variant name ════
+   Matches the typed name against Stock Sheet column B (variant) case-insensitively
+   (so "abc" matches "ABC"). If found, auto-fills that variant's MRP.            */
+function lookupMrpByVariant(name){
+  const target=String(name).trim().toLowerCase();
+  if(!target) return null;
+  // stockCache is keyed by UID, each value = {variant, mrp}
+  for(const key in stockCache){
+    const entry=stockCache[key];
+    if(entry && String(entry.variant).trim().toLowerCase()===target){
+      return { variant: entry.variant, mrp: Number(entry.mrp)||0 };
+    }
+  }
+  return null;
+}
+
+function addItem(){
+  const n=prompt("Variant Name:");
+  if(!n) return;
+  const typed=n.trim();
+  const found=lookupMrpByVariant(typed);
+  if(found){
+    // Use the sheet's exact variant spelling + its MRP
+    items[found.variant]={variant:found.variant,qty:1,mrp:found.mrp,exceeded:false};
+    showToast("Found: "+found.variant+" — MRP ₹"+found.mrp,"success",1800);
+  } else {
+    // Not in stock sheet — add as-is with MRP 0 (user can edit)
+    items[typed]={variant:typed,qty:1,mrp:0,exceeded:false};
+    showToast("\""+typed+"\" not in Stock Sheet — MRP set to 0","warning",2200);
+  }
+  render();
+}
 function removeItem(k){delete items[k];render();}
 
 /* ════ TOAST ════ */
@@ -1006,10 +1066,11 @@ function downloadBill(matchedItems){
   const ch=document.getElementById("challan").value,so=document.getElementById("dealer").value;
   const dn=document.getElementById("dealerName").value,dt=document.getElementById("date").value;
   const time=new Date().toLocaleTimeString("en-IN");
-  let tq=0,tm=0,rows="";
+  let tq=0,tm=0,tt=0,rows="";
   matchedItems.forEach(i=>{
-    tq+=Number(i.qty)||0; tm+=(Number(i.qty)||0)*(Number(i.mrp)||0);
-    rows+=`<tr><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px">${i.variant}</td><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:13px">${i.qty}</td><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;font-size:13px">₹${i.mrp}</td></tr>`;
+    const q=Number(i.qty)||0, m=Number(i.mrp)||0, lt=q*m;
+    tq+=q; tm+=m; tt+=lt;
+    rows+=`<tr><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px">${i.variant}</td><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:13px">${q}</td><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;font-size:13px">₹${m}</td><td style="padding:8px 10px;border-bottom:1px solid #e2e8f0;text-align:right;font-size:13px">₹${lt.toLocaleString("en-IN")}</td></tr>`;
   });
   const html=`<div style="font-family:'DM Sans',Arial,sans-serif;background:#fff;padding:28px;width:540px">
     <div style="background:linear-gradient(135deg,#0d1b3e,#162250);padding:18px 20px;border-radius:10px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
@@ -1027,12 +1088,14 @@ function downloadBill(matchedItems){
         <th style="padding:9px 10px;text-align:left;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;border-bottom:2px solid #d1daf7">Variant</th>
         <th style="padding:9px 10px;text-align:center;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;border-bottom:2px solid #d1daf7">Qty</th>
         <th style="padding:9px 10px;text-align:right;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;border-bottom:2px solid #d1daf7">MRP</th>
+        <th style="padding:9px 10px;text-align:right;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;border-bottom:2px solid #d1daf7">Total</th>
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr style="background:linear-gradient(90deg,#dbeafe,#eff6ff)">
         <td style="padding:9px 10px;font-weight:800;font-size:13px">TOTAL</td>
         <td style="padding:9px 10px;text-align:center;font-weight:800;font-size:13px">${tq}</td>
         <td style="padding:9px 10px;text-align:right;font-weight:800;font-size:13px">₹${tm.toLocaleString("en-IN")}</td>
+        <td style="padding:9px 10px;text-align:right;font-weight:800;font-size:13px">₹${tt.toLocaleString("en-IN")}</td>
       </tr></tfoot>
     </table>
     ${photoData?`<div style="margin-top:14px;text-align:center"><div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px">Confirmation Photo</div><img src="${photoData}" style="max-width:140px;border-radius:7px;border:2px solid #10b981"></div>`:""}
