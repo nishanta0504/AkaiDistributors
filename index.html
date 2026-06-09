@@ -374,6 +374,18 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
         </tfoot>
       </table>
     </div>
+
+    <!-- MANUAL ADD ITEM BOX — fixed, outside the table so it never disappears -->
+    <div id="addItemBox" style="display:none;margin-top:10px">
+      <label style="display:block;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px">Add Item (type to search Stock Sheet)</label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input list="stockVariantList" id="addItemInput" placeholder="Type variant name..." autocomplete="off"
+               style="flex:1;padding:10px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;background:#fff"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addItemFromInput();}">
+        <button class="btn btn-accent" style="white-space:nowrap;padding:10px 16px" onclick="addItemFromInput()">＋ Add</button>
+      </div>
+      <datalist id="stockVariantList"></datalist>
+    </div>
   </div>
 
   <div class="card" style="padding:12px">
@@ -453,7 +465,9 @@ let currentPage = 1;
 let activeScanMode = "qr"; // "qr" | "barcode"
 
 /* ════ CACHE ════ */
-let stockCache    = {};
+let stockCache    = {};   // keyed by UID  → {variant, mrp}  (for scanners)
+let variantCache  = {};    // keyed by lowercase variant → {variant, mrp}  (for manual add)
+let variantNames  = [];    // all variant names (for autocomplete datalist)
 let cacheReady    = false;
 
 /* ════ BARCODE ENGINE ════ */
@@ -553,9 +567,24 @@ function loadStockCache() {
   fetch(API_URL+"?type=stockcache")
     .then(r=>r.json())
     .then(data=>{
-      stockCache={};
-      if(Array.isArray(data))
-        data.forEach(row=>{ if(row.uid) stockCache[String(row.uid).trim()]={variant:row.variant||"",mrp:Number(row.mrp)||0}; });
+      stockCache={}; variantCache={}; variantNames=[];
+      const seen={};
+      if(Array.isArray(data)){
+        data.forEach(row=>{
+          const uid=String(row.uid||"").trim();
+          const variant=String(row.variant||"").trim();
+          const mrp=Number(row.mrp)||0;
+          // UID-keyed cache (for QR/barcode scanners) — only rows with a UID
+          if(uid) stockCache[uid]={variant:variant,mrp:mrp};
+          // Variant-keyed cache + names list (for manual Add Item) — every row with a variant
+          if(variant){
+            const lc=variant.toLowerCase();
+            variantCache[lc]={variant:variant,mrp:mrp};
+            if(!seen[lc]){ seen[lc]=1; variantNames.push(variant); }
+          }
+        });
+      }
+      variantNames.sort();
       cacheReady=true;
       const count=Object.keys(stockCache).length;
       bar.className="ready"; bar.textContent=`✅ ${count} products loaded — scanner ready`;
@@ -885,6 +914,9 @@ function toggleEdit() {
   manualMode=!manualMode;
   document.getElementById("editHead").style.display=manualMode?"":"none";
   document.getElementById("tActionFoot").style.display=manualMode?"":"none";
+  // Show/hide the fixed Add Item box
+  document.getElementById("addItemBox").style.display=manualMode?"block":"none";
+  if(manualMode) populateVariantDatalist();
   document.getElementById("editBtn").innerHTML=manualMode
     ? `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg> Lock`
     : `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Manual`;
@@ -924,50 +956,30 @@ function render() {
       ${manualMode?`<td><button class="btn btn-danger btn-sm" onclick="removeItem('${key}')">✕</button></td>`:`<td></td>`}
     </tr>`;
   });
-  if(manualMode) html+=`<tr><td colspan="5" style="padding:8px 6px">
-      <div style="display:flex;gap:6px;align-items:center">
-        <input list="stockVariantList" id="addItemInput" placeholder="Type variant name..."
-               style="flex:1;padding:8px 10px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;background:#fff"
-               onkeydown="if(event.key==='Enter'){event.preventDefault();addItemFromInput();}">
-        <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="addItemFromInput()">＋ Add</button>
-      </div>
-      <datalist id="stockVariantList"></datalist>
-    </td></tr>`;
   document.getElementById("tbody").innerHTML=html;
   document.getElementById("tQty").textContent=tq;
   document.getElementById("tMrp").textContent="₹"+tm.toLocaleString("en-IN");
   document.getElementById("tTotal").textContent="₹"+tt.toLocaleString("en-IN");
   document.getElementById("tQtyTop").textContent=tq;
-  if(manualMode) populateVariantDatalist();
 }
 
 /* Fill the autocomplete datalist with all variant names from Stock Sheet (column B).
-   Called after render when in manual mode so the Add Item field suggests variants. */
+   Uses the prebuilt variantNames list (already de-duplicated and sorted). */
 function populateVariantDatalist(){
   const dl=document.getElementById("stockVariantList");
   if(!dl) return;
-  // Collect unique variant names from the stock cache
-  const seen={}, opts=[];
-  for(const key in stockCache){
-    const v=stockCache[key] && stockCache[key].variant ? String(stockCache[key].variant).trim() : "";
-    if(v && !seen[v.toLowerCase()]){ seen[v.toLowerCase()]=1; opts.push(v); }
-  }
-  opts.sort();
-  dl.innerHTML=opts.map(v=>`<option value="${v.replace(/"/g,'&quot;')}"></option>`).join("");
+  dl.innerHTML=variantNames.map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join("");
 }
 
 /* ════ MANUAL ADD ITEM — auto-fills MRP from Stock Sheet by variant name ════
    Matches the typed name against Stock Sheet column B (variant) case-insensitively
-   (so "abc" matches "ABC"). If found, auto-fills that variant's MRP.            */
+   (so "abc" matches "ABC"). If found, returns that variant's exact name + MRP.   */
 function lookupMrpByVariant(name){
   const target=String(name).trim().toLowerCase();
   if(!target) return null;
-  // stockCache is keyed by UID, each value = {variant, mrp}
-  for(const key in stockCache){
-    const entry=stockCache[key];
-    if(entry && String(entry.variant).trim().toLowerCase()===target){
-      return { variant: entry.variant, mrp: Number(entry.mrp)||0 };
-    }
+  // Fast direct lookup in the variant-keyed cache
+  if(variantCache[target]){
+    return { variant: variantCache[target].variant, mrp: Number(variantCache[target].mrp)||0 };
   }
   return null;
 }
