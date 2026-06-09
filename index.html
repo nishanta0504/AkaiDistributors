@@ -469,8 +469,8 @@ let bcDecoding  = false;  // true while an async decode call is in-flight
    Different codes are accepted INSTANTLY — rapid multi-item scanning
    stays fast.  Prevents "same barcode fires 3× while held in frame".
    ════════════════════════════════════════════════════════════════════ */
-const SAME_CODE_COOLDOWN = 2500; // ms before same barcode re-fires
-const SAME_QR_COOLDOWN   = 2500; // same for QR mode
+const SAME_CODE_COOLDOWN = 2000; // ms before same barcode re-fires (spare parts — fast)
+const SAME_QR_COOLDOWN   = 3500; // ms before same QR re-fires (products — slower, avoids double-add)
 let lastBcCode  = "";            // last raw barcode value accepted
 let lastBcTime  = 0;             // Date.now() of last accepted barcode
 let lastQrCode  = "";            // last QR value accepted
@@ -644,7 +644,7 @@ function openQRScanner() {
   qrScanner = new Html5Qrcode("reader",{verbose:false});
   qrScanner.start(
     {facingMode:"environment"},
-    {fps:30, qrbox:{width:220,height:220}, aspectRatio:1.0, disableFlip:false,
+    {fps:8, qrbox:{width:220,height:220}, aspectRatio:1.0, disableFlip:false,
      experimentalFeatures:{useBarCodeDetectorIfSupported:true}},
     code => {
       const now = Date.now();
@@ -757,7 +757,7 @@ async function openBCScanner() {
 
   // Throttled interval — decode every 40ms (~25 decode attempts/sec)
   // Fast enough for quick 1D barcode detection, no pile-up
-  bcInterval = setInterval(()=>{ bcDecodeFrame(); }, 40);
+  bcInterval = setInterval(()=>{ bcDecodeFrame(); }, 25);
 
   // Keep screen awake
   try{ if("wakeLock" in navigator) navigator.wakeLock.request("screen"); }catch(e){}
@@ -924,12 +924,36 @@ function render() {
       ${manualMode?`<td><button class="btn btn-danger btn-sm" onclick="removeItem('${key}')">✕</button></td>`:`<td></td>`}
     </tr>`;
   });
-  if(manualMode) html+=`<tr><td colspan="5" style="padding:6px"><button class="btn btn-outline btn-sm" style="width:100%" onclick="addItem()">＋ Add Item</button></td></tr>`;
+  if(manualMode) html+=`<tr><td colspan="5" style="padding:8px 6px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <input list="stockVariantList" id="addItemInput" placeholder="Type variant name..."
+               style="flex:1;padding:8px 10px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;background:#fff"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();addItemFromInput();}">
+        <button class="btn btn-outline btn-sm" style="white-space:nowrap" onclick="addItemFromInput()">＋ Add</button>
+      </div>
+      <datalist id="stockVariantList"></datalist>
+    </td></tr>`;
   document.getElementById("tbody").innerHTML=html;
   document.getElementById("tQty").textContent=tq;
   document.getElementById("tMrp").textContent="₹"+tm.toLocaleString("en-IN");
   document.getElementById("tTotal").textContent="₹"+tt.toLocaleString("en-IN");
   document.getElementById("tQtyTop").textContent=tq;
+  if(manualMode) populateVariantDatalist();
+}
+
+/* Fill the autocomplete datalist with all variant names from Stock Sheet (column B).
+   Called after render when in manual mode so the Add Item field suggests variants. */
+function populateVariantDatalist(){
+  const dl=document.getElementById("stockVariantList");
+  if(!dl) return;
+  // Collect unique variant names from the stock cache
+  const seen={}, opts=[];
+  for(const key in stockCache){
+    const v=stockCache[key] && stockCache[key].variant ? String(stockCache[key].variant).trim() : "";
+    if(v && !seen[v.toLowerCase()]){ seen[v.toLowerCase()]=1; opts.push(v); }
+  }
+  opts.sort();
+  dl.innerHTML=opts.map(v=>`<option value="${v.replace(/"/g,'&quot;')}"></option>`).join("");
 }
 
 /* ════ MANUAL ADD ITEM — auto-fills MRP from Stock Sheet by variant name ════
@@ -948,21 +972,28 @@ function lookupMrpByVariant(name){
   return null;
 }
 
-function addItem(){
-  const n=prompt("Variant Name:");
-  if(!n) return;
-  const typed=n.trim();
+function addItemFromInput(){
+  const input=document.getElementById("addItemInput");
+  if(!input) return;
+  const typed=input.value.trim();
+  if(!typed){ showToast("Type a variant name","warning",1800); return; }
+
   const found=lookupMrpByVariant(typed);
   if(found){
-    // Use the sheet's exact variant spelling + its MRP
-    items[found.variant]={variant:found.variant,qty:1,mrp:found.mrp,exceeded:false};
-    showToast("Found: "+found.variant+" — MRP ₹"+found.mrp,"success",1800);
+    // Variant exists in Stock Sheet → add with its exact name + MRP
+    if(!items[found.variant]) items[found.variant]={variant:found.variant,qty:1,mrp:found.mrp,exceeded:false};
+    else items[found.variant].qty++;
+    input.value=""; // clear for next entry
+    showToast("Added: "+found.variant+" — MRP ₹"+found.mrp,"success",1800);
+    render();
+    // keep focus on the input so user can keep adding quickly
+    setTimeout(()=>{ const el=document.getElementById("addItemInput"); if(el) el.focus(); },50);
   } else {
-    // Not in stock sheet — add as-is with MRP 0 (user can edit)
-    items[typed]={variant:typed,qty:1,mrp:0,exceeded:false};
-    showToast("\""+typed+"\" not in Stock Sheet — MRP set to 0","warning",2200);
+    // NOT found → do NOT add to the list, just show the message
+    showToast("\""+typed+"\" not found in Stock Sheet","error",2500);
+    input.value="";
+    setTimeout(()=>{ const el=document.getElementById("addItemInput"); if(el) el.focus(); },50);
   }
-  render();
 }
 function removeItem(k){delete items[k];render();}
 
