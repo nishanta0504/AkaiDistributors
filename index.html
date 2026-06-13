@@ -170,8 +170,9 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
 .processing-sub{font-size:11px;color:rgba(255,255,255,.5)}
 
 /* ════ TOASTS ════ */
-.toast-container{position:fixed;top:70px;right:12px;z-index:10000;display:flex;flex-direction:column;gap:7px;pointer-events:none}
-.toast{background:#fff;border-radius:var(--rs);box-shadow:0 6px 20px rgba(0,0,0,.13);padding:10px 14px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:500;border-left:4px solid var(--blue);animation:slideIn .22s ease;max-width:265px}
+.toast-container{position:fixed;top:64px;right:10px;left:10px;z-index:10000;display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:none}
+.toast{background:#fff;border-radius:var(--rs);box-shadow:0 8px 26px rgba(0,0,0,.18);padding:14px 18px;display:flex;align-items:center;gap:11px;font-size:15px;font-weight:600;border-left:6px solid var(--blue);animation:slideIn .22s ease;max-width:88%;line-height:1.35}
+.toast span:first-child{font-size:20px;flex-shrink:0}
 .toast.success{border-color:var(--green)}
 .toast.error{border-color:var(--red)}
 .toast.warning{border-color:var(--accent)}
@@ -402,12 +403,22 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
   </div>
 
   <div class="card">
-    <div class="card-title">Confirmation Photo</div>
+    <div class="card-title">Confirmation Photo / Signature</div>
     <div id="photoConfirmedBox" style="display:none"></div>
-    <button class="btn btn-outline" onclick="openCamera()" style="width:100%;margin-bottom:8px" id="openCamBtn">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-      Open Camera
-    </button>
+
+    <!-- Mode chooser: Photo (preferred) or Signature (fallback) -->
+    <div id="confirmChooser" style="display:flex;gap:8px;margin-bottom:8px">
+      <button class="btn btn-outline" onclick="openCamera()" style="flex:1" id="openCamBtn">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Photo
+      </button>
+      <button class="btn btn-outline" onclick="openSign()" style="flex:1" id="openSignBtn">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 17.5V21h3.5L17 10.5l-3.5-3.5L3 17.5z"/><path d="M14.5 6.5l3 3"/></svg>
+        Sign
+      </button>
+    </div>
+    <div style="text-align:center;font-size:10px;color:var(--muted);margin-bottom:8px" id="confirmHint">Photo is preferred. Use Sign only if the camera/photo isn't working.</div>
+
     <div id="cameraBox">
       <div class="cam-title">📷 Live Camera</div>
       <video id="video" autoplay playsinline></video>
@@ -417,6 +428,16 @@ td input[type="number"],td input[type="text"]{width:68px;padding:5px 6px;font-si
       </div>
       <canvas id="canvas"></canvas>
       <div id="preview"></div>
+    </div>
+
+    <!-- Signature pad -->
+    <div id="signBox" style="display:none;text-align:center;background:var(--navy);border-radius:var(--r);padding:14px;margin-bottom:12px">
+      <div class="cam-title" style="color:#fff;font-family:'Syne',sans-serif;font-size:12px;font-weight:700;margin-bottom:10px">✍️ Sign Below</div>
+      <canvas id="signCanvas" style="background:#fff;border-radius:10px;border:2px solid rgba(255,255,255,.2);width:100%;max-width:320px;height:160px;touch-action:none"></canvas>
+      <div class="cam-btns" style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+        <button class="btn btn-success btn-sm" onclick="saveSign()">✔ Save Sign</button>
+        <button class="btn btn-outline btn-sm" onclick="clearSign()">🔄 Clear</button>
+      </div>
     </div>
   </div>
 
@@ -451,6 +472,7 @@ let qrScanner   = null;
 let qrScanning  = false;
 let manualMode  = false;
 let photoData   = "";
+let confirmType = "";   // "photo" or "sign" — which confirmation method was used
 let camStream   = null;
 let currentPage = 1;
 let activeScanMode = "qr";
@@ -529,6 +551,14 @@ window.onload = function() {
   document.addEventListener("click", e => {
     if (!e.target.closest("#menuBtn") && !e.target.closest("#menuDropdown"))
       document.getElementById("menuDropdown").classList.remove("open");
+  });
+  // If the app is backgrounded (tab hidden / phone locked), stop the scanners
+  // so the decode loop & camera don't keep running and freeze the page.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      if (qrScanning) closeQRScanner();
+      if (bcStream)   closeBCScanner();
+    }
   });
 };
 
@@ -918,6 +948,13 @@ function showToast(msg,type="info",dur=2600){
 /* ════ PAGE NAV ════ */
 function goPage(n){
   currentPage=n;
+  // Stop any active scanner/camera when leaving the entry page so the
+  // decode loop / camera stream doesn't keep running in the background
+  // (a common cause of the page freezing).
+  if(n!==1){
+    if(qrScanning) closeQRScanner();
+    if(bcStream)   closeBCScanner();
+  }
   document.getElementById("page1").classList.toggle("active",n===1);
   document.getElementById("page2").classList.toggle("active",n===2);
   document.getElementById("step1tab").className="step"+(n===1?" active":n>1?" done":"");
@@ -958,44 +995,125 @@ function checkFields(){
   if(!document.getElementById("dealer").value){showToast("Select Sales Officer","error");return false;}
   if(!document.getElementById("date").value){showToast("Select Date","error");return false;}
   if(!document.getElementById("dealerName").value.trim()){showToast("Enter Dealer Name","error");return false;}
-  if(!photoData){showToast("Capture confirmation photo","error");return false;}
+  if(!photoData){showToast("Add a confirmation photo or signature","error");return false;}
   if(Object.keys(items).length===0){showToast("No items to submit","error");return false;}
   return true;
 }
 
-/* ════ CAMERA ════ */
+/* ════ CAMERA (confirmation photo — preferred) ════ */
 function openCamera(){
+  closeSign(); // make sure signature pad is closed
   navigator.mediaDevices.getUserMedia({video:{facingMode:"environment",width:{ideal:1280},height:{ideal:720}}})
     .then(s=>{
       camStream=s;
       document.getElementById("cameraBox").style.display="block";
       document.getElementById("video").srcObject=s;
     })
-    .catch(()=>showToast("Camera access denied","error"));
+    .catch(()=>showToast("Camera access denied — you can use Sign instead","error",3000));
 }
 function capturePhoto(){
   const cvs=document.getElementById("canvas"),vid=document.getElementById("video");
   cvs.width=vid.videoWidth||320; cvs.height=vid.videoHeight||240;
   cvs.getContext("2d").drawImage(vid,0,0,cvs.width,cvs.height);
   photoData=cvs.toDataURL("image/jpeg",.82);
+  confirmType="photo";
   if(camStream) camStream.getTracks().forEach(t=>t.stop());
   document.getElementById("video").srcObject=null;
   document.getElementById("cameraBox").style.display="none";
   document.getElementById("preview").innerHTML="";
+  document.getElementById("confirmChooser").style.display="none";
+  document.getElementById("confirmHint").style.display="none";
   document.getElementById("photoConfirmedBox").style.display="flex";
   document.getElementById("photoConfirmedBox").className="photo-confirmed";
   document.getElementById("photoConfirmedBox").innerHTML=`
     <img src="${photoData}" alt="photo">
-    <div><div class="pc-text">✅ Photo Captured</div><div class="pc-sub">Tap Retake to change</div></div>
-    <button class="btn btn-outline btn-sm" onclick="retakePhoto()" style="margin-left:auto">Retake</button>`;
-  document.getElementById("openCamBtn").style.display="none";
+    <div><div class="pc-text">✅ Photo Captured</div><div class="pc-sub">Tap Redo to change</div></div>
+    <button class="btn btn-outline btn-sm" onclick="resetConfirm()" style="margin-left:auto">Redo</button>`;
   showToast("Photo captured!","success");
 }
 function retakePhoto(){
-  photoData="";
+  photoData=""; confirmType="";
   document.getElementById("photoConfirmedBox").style.display="none";
-  document.getElementById("openCamBtn").style.display="flex";
   openCamera();
+}
+
+/* ════ SIGNATURE (fallback when photo not working) ════ */
+let signCtx=null, signing=false, signHasInk=false;
+function openSign(){
+  // close camera if open
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  document.getElementById("video").srcObject=null;
+  document.getElementById("cameraBox").style.display="none";
+  document.getElementById("signBox").style.display="block";
+  // Size & init the canvas AFTER it is visible, so its measured width is correct
+  // (sizing while still hidden returns 0 and makes strokes land in the wrong spot).
+  requestAnimationFrame(()=>{ setTimeout(initSignCanvas, 30); });
+}
+function initSignCanvas(){
+  const cvs=document.getElementById("signCanvas");
+  const rect=cvs.getBoundingClientRect();
+  const w=Math.max(280, Math.round(rect.width || cvs.clientWidth || 320));
+  const h=Math.max(150, Math.round(rect.height || 160));
+  cvs.width=w; cvs.height=h;
+  signCtx=cvs.getContext("2d");
+  signCtx.fillStyle="#ffffff"; signCtx.fillRect(0,0,cvs.width,cvs.height);
+  signCtx.strokeStyle="#0d1b3e"; signCtx.lineWidth=3;
+  signCtx.lineCap="round"; signCtx.lineJoin="round";
+  signHasInk=false;
+  bindSignEvents(cvs);
+}
+function signPos(cvs,e){
+  const r=cvs.getBoundingClientRect();
+  const t=(e.touches&&e.touches[0])?e.touches[0]:((e.changedTouches&&e.changedTouches[0])?e.changedTouches[0]:e);
+  const rw=r.width||cvs.width, rh=r.height||cvs.height;
+  return { x:(t.clientX-r.left)*(cvs.width/rw), y:(t.clientY-r.top)*(cvs.height/rh) };
+}
+function bindSignEvents(cvs){
+  if(cvs._signBound) return; // bind once
+  cvs._signBound=true;
+  const start=e=>{ e.preventDefault(); signing=true; const p=signPos(cvs,e); signCtx.beginPath(); signCtx.moveTo(p.x,p.y);
+    // draw a small dot so a single tap also registers
+    signCtx.lineTo(p.x+0.1,p.y+0.1); signCtx.stroke(); signHasInk=true; };
+  const move =e=>{ if(!signing) return; e.preventDefault(); const p=signPos(cvs,e); signCtx.lineTo(p.x,p.y); signCtx.stroke(); signHasInk=true; };
+  const end  =e=>{ signing=false; };
+  cvs.addEventListener("mousedown",start); cvs.addEventListener("mousemove",move); window.addEventListener("mouseup",end);
+  cvs.addEventListener("touchstart",start,{passive:false}); cvs.addEventListener("touchmove",move,{passive:false}); cvs.addEventListener("touchend",end);
+}
+function clearSign(){
+  if(!signCtx) return;
+  const cvs=document.getElementById("signCanvas");
+  signCtx.fillStyle="#ffffff"; signCtx.fillRect(0,0,cvs.width,cvs.height);
+  signHasInk=false;
+}
+function saveSign(){
+  if(!signHasInk){ showToast("Please sign first","warning",1800); return; }
+  const cvs=document.getElementById("signCanvas");
+  photoData=cvs.toDataURL("image/jpeg",.85);
+  confirmType="sign";
+  document.getElementById("signBox").style.display="none";
+  document.getElementById("confirmChooser").style.display="none";
+  document.getElementById("confirmHint").style.display="none";
+  document.getElementById("photoConfirmedBox").style.display="flex";
+  document.getElementById("photoConfirmedBox").className="photo-confirmed";
+  document.getElementById("photoConfirmedBox").innerHTML=`
+    <img src="${photoData}" alt="sign">
+    <div><div class="pc-text">✅ Signature Saved</div><div class="pc-sub">Tap Redo to change</div></div>
+    <button class="btn btn-outline btn-sm" onclick="resetConfirm()" style="margin-left:auto">Redo</button>`;
+  showToast("Signature saved!","success");
+}
+function closeSign(){
+  document.getElementById("signBox").style.display="none";
+}
+/* Reset back to the chooser (used by both Photo and Sign "Redo") */
+function resetConfirm(){
+  photoData=""; confirmType="";
+  if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+  document.getElementById("video").srcObject=null;
+  document.getElementById("cameraBox").style.display="none";
+  document.getElementById("signBox").style.display="none";
+  document.getElementById("photoConfirmedBox").style.display="none";
+  document.getElementById("confirmChooser").style.display="flex";
+  document.getElementById("confirmHint").style.display="block";
 }
 
 /* ════ DOWNLOAD BILL (with Total column) — splits into pages of 30 lines ════ */
@@ -1003,6 +1121,10 @@ function downloadBill(matchedItems){
   const ch=document.getElementById("challan").value,so=document.getElementById("dealer").value;
   const dn=document.getElementById("dealerName").value,dt=document.getElementById("date").value;
   const time=new Date().toLocaleTimeString("en-IN");
+  // Snapshot the bill number, photo/sign and its type NOW, so if the form resets
+  // while a multi-page bill is still rendering, the later pages still use the
+  // correct values.
+  const billNoSnap=lastBillNo, photoSnap=photoData, typeSnap=confirmType;
 
   // Grand totals across ALL items (same on every page)
   let tq=0,tm=0,tt=0;
@@ -1040,7 +1162,7 @@ function downloadBill(matchedItems){
       <div style="background:#f8faff;border-radius:7px;padding:10px;border:1px solid #d1daf7"><div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;margin-bottom:3px">Sales Officer</div><div style="font-weight:700;font-size:13px">${so}</div></div>
       <div style="background:#f8faff;border-radius:7px;padding:10px;border:1px solid #d1daf7"><div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;margin-bottom:3px">Dealer</div><div style="font-weight:700;font-size:13px">${dn}</div></div>
     </div>
-    ${lastBillNo!==""?`<div style="background:linear-gradient(90deg,#fef3c7,#fffbeb);border-radius:7px;padding:10px 12px;border:1px solid #fcd34d;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:9px;color:#92400e;text-transform:uppercase;letter-spacing:.7px">Delivery Number</div><div style="font-weight:800;font-size:15px;color:#0d1b3e">${lastBillNo}</div></div>`:""}
+    ${billNoSnap!==""?`<div style="background:linear-gradient(90deg,#fef3c7,#fffbeb);border-radius:7px;padding:10px 12px;border:1px solid #fcd34d;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center"><div style="font-size:9px;color:#92400e;text-transform:uppercase;letter-spacing:.7px">Delivery Number</div><div style="font-weight:800;font-size:15px;color:#0d1b3e">${billNoSnap}</div></div>`:""}
     <table style="width:100%;border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
       <thead><tr style="background:linear-gradient(90deg,#e8eeff,#f0f4ff)">
         <th style="padding:9px 10px;text-align:left;font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;border-bottom:2px solid #d1daf7">Variant</th>
@@ -1056,8 +1178,9 @@ function downloadBill(matchedItems){
         <td style="padding:9px 10px;text-align:right;font-weight:800;font-size:13px">₹${tt.toLocaleString("en-IN")}</td>
       </tr></tfoot>
     </table>
-    ${(isLast && photoData)?`<div style="margin-top:14px;text-align:center"><div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px">Confirmation Photo</div><img src="${photoData}" style="max-width:140px;border-radius:7px;border:2px solid #10b981"></div>`:""}
+    ${(isLast && photoSnap)?`<div style="margin-top:14px;text-align:center"><div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px">${typeSnap==="sign"?"Signature":"Confirmation Photo"}</div><img src="${photoSnap}" style="max-width:${typeSnap==="sign"?"220":"140"}px;border-radius:7px;border:2px solid #10b981"></div>`:""}
     <div style="margin-top:14px;text-align:center;font-size:9px;color:#94a3b8">AKAI Distributors — Approval Challan${pageFoot}</div>
+    <div style="margin-top:8px;text-align:center;font-size:10px;color:#475569;font-weight:800">Disclaimer: data is entered manually and mistakes may occur</div>
   </div>`;
   }
 
@@ -1067,7 +1190,7 @@ function downloadBill(matchedItems){
     if(idx>=pages.length){ bill.style.display="none"; bill.innerHTML=""; return; }
     bill.innerHTML=buildPageHtml(pages[idx], idx);
     bill.style.display="block";
-    html2canvas(bill,{scale:2,useCORS:true,backgroundColor:"#ffffff"}).then(c=>{
+    html2canvas(bill,{scale:1.6,useCORS:true,backgroundColor:"#ffffff"}).then(c=>{
       const a=document.createElement("a");
       a.href=c.toDataURL("image/jpeg",.92);
       const suffix=(totalPages>1)?`_page${idx+1}`:"";
@@ -1089,11 +1212,14 @@ function submitData(){
   const dealerVal=document.getElementById("dealerName").value.trim();
   const dateVal=fmtDate(document.getElementById("date").value);
   const cleanItems=Object.values(items).map(i=>({variant:String(i.variant).trim(),qty:Number(i.qty)||0,mrp:Number(i.mrp)||0}));
+  // NOTE: photo/signature is used only for the local download — the server does
+  // not store it — so we DON'T send it in the POST. This keeps the request body
+  // small and makes submit noticeably faster.
   fetch(API_URL,{
     method:"POST",
     body:new URLSearchParams({data:JSON.stringify({
       challan:challanVal,so:soVal,dealer:dealerVal,
-      date:dateVal,items:cleanItems,photo:photoData,billOffset:BILL_NUMBER_OFFSET
+      date:dateVal,items:cleanItems,billOffset:BILL_NUMBER_OFFSET
     })})
   })
   .then(async res=>{
@@ -1112,21 +1238,20 @@ function submitData(){
       newItems[i.variant]={variant:i.variant,qty:i.qty,mrp:i.mrp,exceeded:false};
     });
     items=newItems; render();
-    if(matchedForBill.length>0) downloadBill(matchedForBill);
     refreshSummary(); // update summary so Delivery Number shows on page 2
     const exceedCount=(data.matched||[]).filter(m=>m.qtyExceeded>0).length;
     const noMatchCount=(data.notMatched||[]).length;
+    // Kick off the download right after showing results (non-blocking)
+    if(matchedForBill.length>0) setTimeout(()=>downloadBill(matchedForBill), 50);
     if(exceedCount+noMatchCount===0){
       showToast("All items submitted! Delivery No: "+lastBillNo,"success",4000);
       setTimeout(()=>{
         document.getElementById("challan").value="";
         document.getElementById("dealer").value="";
         document.getElementById("dealerName").value="";
-        photoData="";
         lastBillNo="";
         document.getElementById("preview").innerHTML="";
-        document.getElementById("photoConfirmedBox").style.display="none";
-        document.getElementById("openCamBtn").style.display="flex";
+        resetConfirm();
         goPage(1);
       },1600);
     } else {
